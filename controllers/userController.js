@@ -394,7 +394,7 @@ async function geocodeAddress(flatNumber, address, city, state, pincode) {
       `https://nominatim.openstreetmap.org/search?format=json&q=${formattedAddress}&limit=1`,
       {
         headers: {
-          'User-Agent': 'Naanly-App/1.0' // Required by Nominatim policy
+          'User-Agent': 'NextGenFix-App/1.0' // Required by Nominatim policy
         }
       }
     );

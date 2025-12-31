@@ -77,7 +77,7 @@ const settingsSchema = new mongoose.Schema({
   
   // App Configuration (Public)
   appConfig: {
-    appName: { type: String, default: 'Naanly' },
+    appName: { type: String, default: 'NextGenFix' },
     supportEmail: { type: String },
     supportPhone: { type: String },
     currency: { type: String, default: 'INR' },

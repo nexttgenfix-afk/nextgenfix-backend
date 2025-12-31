@@ -108,7 +108,7 @@ app.use('/api/settings', settingsRoutes);
 // Root route
 app.get('/', (req, res) => {
   res.json({
-    message: 'Welcome to Naanly API',
+    message: 'Welcome to NextGenFix API',
     version: '1.0.0',
     status: 'running'
   });
@@ -136,7 +136,7 @@ console.log('🧹 Guest cleanup cron job scheduled (daily at 2 AM)');
 
 // Start server
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Naanly API Server running on port ${PORT}`);
+  console.log(`🚀 NextGenFix API Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
 });

@@ -23,7 +23,7 @@ wss.on('connection', (ws) => {
     console.log('Received:', message);
     ws.send(`Echo: ${message}`);
   });
-  ws.send('Welcome to Naanly WebSocket server!');
+  ws.send('Welcome to NextGenFix WebSocket server!');
 });
 
 module.exports = { app, server, wss };

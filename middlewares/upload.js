@@ -38,7 +38,7 @@ if (hasCloudinary) {
   genericImageStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/uploads',
+      folder: 'nextgenfix/uploads',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [{ quality: 'auto' }]
     }
@@ -47,7 +47,7 @@ if (hasCloudinary) {
   genericVideoStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/uploads/videos',
+      folder: 'nextgenfix/uploads/videos',
       resource_type: 'video'
     }
   });

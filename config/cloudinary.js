@@ -19,7 +19,7 @@ if (hasCloudinaryEnv) {
   const menuItemPhotoStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/menu-items',
+      folder: 'nextgenfix/menu-items',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 800, height: 600, crop: 'limit' },
@@ -32,7 +32,7 @@ if (hasCloudinaryEnv) {
   const restaurantPhotoStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/restaurants',
+      folder: 'nextgenfix/restaurants',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 1200, height: 800, crop: 'limit' },
@@ -45,7 +45,7 @@ if (hasCloudinaryEnv) {
   const chefProfileStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/chefs/profile',
+      folder: 'nextgenfix/chefs/profile',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 500, height: 500, crop: 'limit' },
@@ -58,7 +58,7 @@ if (hasCloudinaryEnv) {
   const chefCoverStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/chefs/cover',
+      folder: 'nextgenfix/chefs/cover',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 1200, height: 400, crop: 'limit' },
@@ -71,7 +71,7 @@ if (hasCloudinaryEnv) {
   const mealBoxPhotoStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/meal-boxes',
+      folder: 'nextgenfix/meal-boxes',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 800, height: 800, crop: 'limit' },
@@ -84,7 +84,7 @@ if (hasCloudinaryEnv) {
   const cloudinaryStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-      folder: 'naanly/combo-photos',
+      folder: 'nextgenfix/combo-photos',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 800, height: 800, crop: 'limit' },
