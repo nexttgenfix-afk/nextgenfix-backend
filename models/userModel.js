@@ -218,6 +218,16 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  nanoPoints: {
+    type: Number,
+    default: 0
+  },
+  nanoPointsHistory: [{
+    points: Number,
+    type: { type: String }, // 'earn', 'redeem', 'bonus'
+    description: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
   
   // Account Status
   status: {

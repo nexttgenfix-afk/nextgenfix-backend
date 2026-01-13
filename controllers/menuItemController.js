@@ -760,6 +760,20 @@ exports.searchMenuItems = async (req, res) => {
       filter.isAvailable = true;
     }
 
+    // Add active special offer check
+    const now = new Date();
+    if (!filter.$and) filter.$and = [];
+    filter.$and.push({
+      $or: [
+        { 'specialOffer.isSpecial': { $ne: true } },
+        { 
+          'specialOffer.isSpecial': true,
+          'specialOffer.validFrom': { $lte: now },
+          'specialOffer.validUntil': { $gte: now }
+        }
+      ]
+    });
+
     // Determine sort field
     let sortField = {};
     switch (sort) {
@@ -830,15 +844,28 @@ exports.getMenuItemsByMood = async (req, res) => {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
+    const now = new Date();
+    const query = { 
+      moodTag: mood, 
+      isAvailable: true,
+      $or: [
+        { 'specialOffer.isSpecial': { $ne: true } },
+        { 
+          'specialOffer.isSpecial': true,
+          'specialOffer.validFrom': { $lte: now },
+          'specialOffer.validUntil': { $gte: now }
+        }
+      ]
+    };
 
     const [menuItems, totalItems] = await Promise.all([
-      MenuItem.find({ moodTag: mood, isAvailable: true })
+      MenuItem.find(query)
         .populate('category', 'name')
         .sort({ 'popularity.orderCount': -1 })
         .skip(skip)
         .limit(Number(limit))
         .lean(),
-      MenuItem.countDocuments({ moodTag: mood, isAvailable: true })
+      MenuItem.countDocuments(query)
     ]);
 
     res.status(200).json({
@@ -874,15 +901,28 @@ exports.getMenuItemsByHungerLevel = async (req, res) => {
     }
 
     const skip = (Number(page) - 1) * Number(limit);
+    const now = new Date();
+    const query = { 
+      hungerLevelTag: level, 
+      isAvailable: true,
+      $or: [
+        { 'specialOffer.isSpecial': { $ne: true } },
+        { 
+          'specialOffer.isSpecial': true,
+          'specialOffer.validFrom': { $lte: now },
+          'specialOffer.validUntil': { $gte: now }
+        }
+      ]
+    };
 
     const [menuItems, totalItems] = await Promise.all([
-      MenuItem.find({ hungerLevelTag: level, isAvailable: true })
+      MenuItem.find(query)
         .populate('category', 'name')
         .sort({ 'popularity.orderCount': -1 })
         .skip(skip)
         .limit(Number(limit))
         .lean(),
-      MenuItem.countDocuments({ hungerLevelTag: level, isAvailable: true })
+      MenuItem.countDocuments(query)
     ]);
 
     res.status(200).json({

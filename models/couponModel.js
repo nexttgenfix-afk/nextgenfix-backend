@@ -13,7 +13,7 @@ const couponSchema = new mongoose.Schema({
   },
   discountType: {
     type: String,
-    enum: ['percentage', 'fixed', 'free_delivery'],
+    enum: ['percentage', 'fixed', 'free_delivery', 'bogo'],
     required: true
   },
   minOrderValue: {
@@ -57,6 +57,10 @@ const couponSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isLocked: {
+    type: Boolean,
+    default: false
+  },
   // Refund / revoke metadata
   refunded: { type: Boolean, default: false },
   refundReason: { type: String, default: null },
@@ -64,16 +68,15 @@ const couponSchema = new mongoose.Schema({
   // Small meta object allowing origin tagging (e.g., 'referral')
   meta: {
     origin: { type: String, default: null },
-    originType: { type: String, default: null }
+    originType: { type: String, default: null },
+    originalPrizeId: { type: String, default: null }
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
     refPath: 'createdByType' // Dynamic reference
   },
   createdByType: {
     type: String,
-    required: true,
     enum: ['Chef', 'Restaurant', 'Admin'] // Specify allowed types
   },
   createdAt: {

@@ -48,11 +48,25 @@ exports.getMenuItems = async (req, res) => {
     const restaurantIds = nearbyRestaurants.map(r => r._id);
     const chefIds = nearbyChefs.map(c => c._id);
     
-    // Base query conditions - always applied
+    // Base query conditions - always applied (filters active items)
     const baseQuery = {
-      $or: [
-        { restaurantId: { $in: restaurantIds } },
-        { chefId: { $in: chefIds } }
+      $and: [
+        {
+          $or: [
+            { restaurantId: { $in: restaurantIds } },
+            { chefId: { $in: chefIds } }
+          ]
+        },
+        {
+          $or: [
+            { 'specialOffer.isSpecial': { $ne: true } },
+            { 
+              'specialOffer.isSpecial': true,
+              'specialOffer.validFrom': { $lte: today },
+              'specialOffer.validUntil': { $gte: today }
+            }
+          ]
+        }
       ]
     };
     

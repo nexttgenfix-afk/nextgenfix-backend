@@ -19,7 +19,22 @@ const getAllMenuItems = async (req, res) => {
       isAvailable = true
     } = req.query;
 
-    let query = { isAvailable };
+    const now = new Date();
+    let query = { 
+      isAvailable,
+      $and: [
+        {
+          $or: [
+            { 'specialOffer.isSpecial': { $ne: true } },
+            { 
+              'specialOffer.isSpecial': true,
+              'specialOffer.validFrom': { $lte: now },
+              'specialOffer.validUntil': { $gte: now }
+            }
+          ]
+        }
+      ]
+    };
 
     // Add filters
     if (category) query.category = category;
@@ -90,7 +105,19 @@ const getRecommendations = async (req, res) => {
 // Get trending items
 const getTrendingItems = async (req, res) => {
   try {
-    let trendingQuery = MenuItem.find({ isAvailable: true }).sort({ orderCount: -1, rating: -1 }).limit(10).populate('category', 'name');
+    const now = new Date();
+    const query = {
+      isAvailable: true,
+      $or: [
+        { 'specialOffer.isSpecial': { $ne: true } },
+        { 
+          'specialOffer.isSpecial': true,
+          'specialOffer.validFrom': { $lte: now },
+          'specialOffer.validUntil': { $gte: now }
+        }
+      ]
+    };
+    let trendingQuery = MenuItem.find(query).sort({ orderCount: -1, rating: -1 }).limit(10).populate('category', 'name');
     const trendingItems = await trendingQuery;
 
     res.json(trendingItems);
@@ -109,13 +136,28 @@ const searchMenuItems = async (req, res) => {
     }
 
     const searchRegex = new RegExp(q, 'i');
+    const now = new Date();
 
     let searchQuery = MenuItem.find({
       isAvailable: true,
-      $or: [
-        { name: searchRegex },
-        { description: searchRegex },
-        { tags: { $in: [searchRegex] } }
+      $and: [
+        {
+          $or: [
+            { name: searchRegex },
+            { description: searchRegex },
+            { tags: { $in: [searchRegex] } }
+          ]
+        },
+        {
+          $or: [
+            { 'specialOffer.isSpecial': { $ne: true } },
+            { 
+              'specialOffer.isSpecial': true,
+              'specialOffer.validFrom': { $lte: now },
+              'specialOffer.validUntil': { $gte: now }
+            }
+          ]
+        }
       ]
     });
     searchQuery = searchQuery.populate('category', 'name');

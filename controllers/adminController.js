@@ -243,7 +243,7 @@ exports.getUserStats = async (req, res) => {
 // User management
 exports.getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, status } = req.query;
+    const { page = 1, limit = 10, search, status, tier } = req.query;
 
     let query = {};
     if (search) {
@@ -255,6 +255,9 @@ exports.getAllUsers = async (req, res) => {
     }
     if (status) {
       query.status = status;
+    }
+    if (tier) {
+      query.tier = tier;
     }
 
     const users = await User.find(query)
@@ -1099,7 +1102,7 @@ exports.getMenuItems = async (req, res) => {
 // Get single menu item details
 exports.getMenuItemById = async (req, res) => {
   try {
-    const item = await MenuItem.findById(req.params.menuItemId);
+    const item = await MenuItem.findById(req.params.menuItemId).populate('recommendedItems', 'name');
     if (!item) {
       return res.status(404).json({ message: 'Menu item not found' });
     }
@@ -1127,7 +1130,8 @@ exports.updateMenuItem = async (req, res) => {
       moodTag,
       hungerLevelTag,
       recommendedItems,
-      nutritionInfo
+      nutritionInfo,
+      specialOffer
     } = req.body;
 
     // Validate mood and hunger level tags if provided
@@ -1157,8 +1161,7 @@ exports.updateMenuItem = async (req, res) => {
 
     // Validate recommendedItems exist if provided
     if (parsedRecommendedItems && Array.isArray(parsedRecommendedItems) && parsedRecommendedItems.length > 0) {
-      const MenuItemModel = require('../models/menuItemModel');
-      const validItems = await MenuItemModel.find({ _id: { $in: parsedRecommendedItems } });
+      const validItems = await MenuItem.find({ _id: { $in: parsedRecommendedItems } });
       if (validItems.length !== parsedRecommendedItems.length) {
         return res.status(400).json({ message: 'One or more recommended items do not exist' });
       }
@@ -1202,6 +1205,20 @@ exports.updateMenuItem = async (req, res) => {
     }
     
     if (nutritionInfo !== undefined) update.nutritionInfo = nutritionInfo;
+
+    // Parse and add specialOffer if provided
+    if (specialOffer !== undefined) {
+      if (typeof specialOffer === 'string') {
+        try {
+          update.specialOffer = JSON.parse(specialOffer);
+        } catch (e) {
+          console.warn('Failed to parse specialOffer:', e);
+          update.specialOffer = null;
+        }
+      } else {
+        update.specialOffer = specialOffer;
+      }
+    }
 
     // Handle Cloudinary image URLs from middleware
     if (req.files && req.files.length > 0) {
@@ -1277,7 +1294,8 @@ exports.addMenuItem = async (req, res) => {
       moodTag,
       hungerLevelTag,
       recommendedItems,
-      nutritionInfo
+      nutritionInfo,
+      specialOffer
     } = req.body;
     
     // Validate required fields
@@ -1298,22 +1316,6 @@ exports.addMenuItem = async (req, res) => {
       return res.status(400).json({ message: `Invalid hungerLevelTag. Must be one of: ${validHungerLevelTags.join(', ')}` });
     }
 
-    // Validate recommendedItems exist if provided
-    if (recommendedItems && recommendedItems.length > 0) {
-      const { MenuItem: MenuItemModel } = require('../models/menuItemModel');
-      const validItems = await MenuItemModel.find({ _id: { $in: recommendedItems } });
-      if (validItems.length !== recommendedItems.length) {
-        return res.status(400).json({ message: 'One or more recommended items do not exist' });
-      }
-    }
-
-    // Handle Cloudinary image URLs from middleware
-    let imageUrl = image;
-    if (req.files && req.files.length > 0) {
-      // Cloudinary middleware will store uploaded file info in req.files
-      imageUrl = req.files[0].path; // Cloudinary secure_url
-    }
-    
     // Parse allergens and recommendedItems if they are JSON strings
     let parsedAllergens = allergens || [];
     if (typeof allergens === 'string') {
@@ -1334,6 +1336,30 @@ exports.addMenuItem = async (req, res) => {
         parsedRecommendedItems = [];
       }
     }
+
+    let parsedSpecialOffer = null;
+    if (specialOffer) {
+      try {
+        parsedSpecialOffer = typeof specialOffer === 'string' ? JSON.parse(specialOffer) : specialOffer;
+      } catch (e) {
+        console.warn('Failed to parse specialOffer:', e);
+      }
+    }
+
+    // Validate recommendedItems exist if provided
+    if (parsedRecommendedItems && parsedRecommendedItems.length > 0) {
+      const validItems = await MenuItem.find({ _id: { $in: parsedRecommendedItems } });
+      if (validItems.length !== parsedRecommendedItems.length) {
+        return res.status(400).json({ message: 'One or more recommended items do not exist' });
+      }
+    }
+
+    // Handle Cloudinary image URLs from middleware
+    let imageUrl = image;
+    if (req.files && req.files.length > 0) {
+      // Cloudinary middleware will store uploaded file info in req.files
+      imageUrl = req.files[0].path; // Cloudinary secure_url
+    }
     
     const itemData = {
       name,
@@ -1349,6 +1375,7 @@ exports.addMenuItem = async (req, res) => {
       moodTag: moodTag || null,
       hungerLevelTag: hungerLevelTag || null,
       recommendedItems: parsedRecommendedItems,
+      specialOffer: parsedSpecialOffer,
       nutritionInfo: nutritionInfo || {
         calories: 0,
         protein: 0,
@@ -1468,7 +1495,7 @@ exports.exportOrders = async (req, res) => {
 // List users with optional search, filter, pagination
 exports.getUsers = async (req, res) => {
   try {
-    const { search = '', status, dietPreference, eatingPreference, page = 1, limit = 10 } = req.query;
+    const { search = '', status, dietPreference, eatingPreference, tier, page = 1, limit = 10 } = req.query;
     const query = {};
     if (search) {
       query.$or = [
@@ -1485,6 +1512,9 @@ exports.getUsers = async (req, res) => {
     }
     if (eatingPreference) {
       query['eatingPreference'] = eatingPreference;
+    }
+    if (tier) {
+      query.tier = tier;
     }
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const users = await User.find(query)
