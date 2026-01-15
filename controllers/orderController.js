@@ -2,6 +2,7 @@ const Order = require('../models/orderModel');
 const Cart = require('../models/cartModel');
 const User = require('../models/userModel');
 const MenuItem = require('../models/menuItemModel');
+const mongoose = require('mongoose');
 const { initiatePayment, verifyPayment } = require('../services/payment');
 const { createNotification } = require('../services/notification');
 const { updateUserTier } = require('../services/tier');
@@ -456,7 +457,7 @@ const reorder = async (req, res) => {
 // Admin: Get all orders
 const getAllOrders = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, startDate, endDate } = req.query;
+    const { page = 1, limit = 10, status, startDate, endDate, search } = req.query;
 
     let query = {};
     if (status) query.status = status;
@@ -464,6 +465,26 @@ const getAllOrders = async (req, res) => {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
       if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    // If a search query is provided, try to match order id, delivery address or user name/phone
+    if (search) {
+      const regex = new RegExp(String(search), 'i');
+
+      // Users matching name or phone
+      const matchingUserIds = await User.find({ $or: [{ name: regex }, { phone: regex }] }).distinct('_id');
+
+      const orConditions = [
+        { deliveryAddress: regex },
+        { user: { $in: matchingUserIds } }
+      ];
+
+      // If search looks like an ObjectId, also match by _id
+      if (mongoose.Types.ObjectId.isValid(search)) {
+        orConditions.unshift({ _id: mongoose.Types.ObjectId(search) });
+      }
+
+      query.$or = orConditions;
     }
 
     const orders = await Order.find(query)
@@ -498,7 +519,11 @@ const getAllOrders = async (req, res) => {
 // Admin: Update order status
 const updateOrderStatus = async (req, res) => {
   try {
-    const { status, notes } = req.body;
+    const { status: requestedStatus, notes } = req.body;
+
+    if (!requestedStatus || typeof requestedStatus !== 'string') {
+      return res.status(400).json({ message: 'Invalid or missing status in request body' });
+    }
 
     const order = await Order.findById(req.params.id)
       .populate('user', 'name');
@@ -507,48 +532,94 @@ const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
+    // Map external/pretty status values to internal enum values
+    const statusMap = {
+      Ordered: 'placed',
+      ordered: 'placed',
+      Preparing: 'preparing',
+      preparing: 'preparing',
+      Dispatched: 'out-for-delivery',
+      dispatched: 'out-for-delivery',
+      Delivered: 'delivered',
+      delivered: 'delivered',
+      Canceled: 'cancelled',
+      cancelled: 'cancelled',
+      canceled: 'cancelled',
+    };
+
+    const mappedStatus = statusMap[requestedStatus] || requestedStatus.toLowerCase();
+
+    const allowed = ['placed', 'preparing', 'out-for-delivery', 'delivered', 'cancelled'];
+    if (!allowed.includes(mappedStatus)) {
+      return res.status(400).json({ message: `Unsupported status: ${requestedStatus}` });
+    }
+
     // Update status
     const oldStatus = order.status;
-    order.status = status;
+    order.status = mappedStatus;
 
-    // Add to tracking history
+    // Add to tracking history (store the requestedStatus for human readability)
+    if (!Array.isArray(order.trackingHistory)) order.trackingHistory = [];
     order.trackingHistory.push({
-      status,
+      status: mappedStatus,
       timestamp: new Date(),
-      notes
+      notes: notes || ''
     });
 
     // Set estimated delivery time for certain statuses
-    if (status === 'confirmed') {
+    if (mappedStatus === 'preparing' || mappedStatus === 'out-for-delivery') {
+      // Set an estimated delivery time only when moving to preparing or dispatched
       order.estimatedDeliveryTime = new Date(Date.now() + 45 * 60 * 1000); // 45 minutes
-    } else if (status === 'delivered') {
+    }
+
+    if (mappedStatus === 'delivered') {
       order.deliveredAt = new Date();
 
-      // Update user tier and total spent
-      const user = await User.findById(order.user);
-      if (user) {
-        user.totalSpent = (user.totalSpent || 0) + order.totalAmount;
-        await user.save();
-        await updateUserTier(user._id);
+      // Update user tier and total spent (use billing.totalAmount if present)
+      try {
+        const userId = order.user && order.user._id ? order.user._id : order.user;
+        const user = await User.findById(userId);
+        if (user) {
+          const amount = (order.billing && order.billing.totalAmount) || order.totalAmount || 0;
+          user.totalSpent = (user.totalSpent || 0) + amount;
+          await user.save();
+          try {
+            await updateUserTier(user._id);
+          } catch (tierErr) {
+            console.error('updateUserTier error for user', user._id, tierErr);
+          }
+        }
+      } catch (userErr) {
+        console.error('Error updating user after delivery for order', order._id, userErr);
       }
     }
 
     await order.save();
 
-    // Create notification for user
-    await createNotification({
-      userId: order.user,
-      title: 'Order Status Updated',
-      message: `Your order #${order.orderNumber} status changed to ${status}`,
-      type: 'order',
-      data: { orderId: order._id }
-    });
+    // Create notification for user (send user id)
+    try {
+      const notifyUserId = order.user && order.user._id ? order.user._id : order.user;
+      await createNotification({
+        userId: notifyUserId,
+        title: 'Order Status Updated',
+        message: `Your order #${order.orderNumber || order._id} status changed to ${requestedStatus}`,
+        type: 'order',
+        data: { orderId: order._id }
+      });
+    } catch (notifErr) {
+      console.error('Notification error after status update:', notifErr);
+    }
 
     res.json({
       message: 'Order status updated successfully',
       order
     });
   } catch (error) {
+    console.error('Update order status error:', error);
+    // If it's a mongoose validation error, return 400 with message for debugging
+    if (error && error.name === 'ValidationError') {
+      return res.status(400).json({ message: 'Validation error', error: error.message });
+    }
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
