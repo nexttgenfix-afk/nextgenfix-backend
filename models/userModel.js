@@ -150,7 +150,7 @@ const userSchema = new mongoose.Schema({
     },
     mood: {
       type: String,
-      enum: ['good', 'angry', 'in_love', 'sad'],
+      enum: ['locked_in', 'bougie', 'homesick', 'burnt_tf_out', 'need_a_hug'],
       default: null
     },
     updatedAt: { type: Date, default: null }
@@ -210,6 +210,10 @@ const userSchema = new mongoose.Schema({
   },
   
   // Order Statistics
+  calorieGoal: {
+    type: Number,
+    default: null
+  },
   totalOrders: {
     type: Number,
     default: 0
@@ -228,7 +232,14 @@ const userSchema = new mongoose.Schema({
     description: String,
     timestamp: { type: Date, default: Date.now }
   }],
-  
+
+  // Wallet
+  walletBalance: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+
   // Account Status
   status: {
     type: String,

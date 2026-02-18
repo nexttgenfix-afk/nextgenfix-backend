@@ -96,6 +96,20 @@ const menuItemSchema = new mongoose.Schema({
     },
     additional: [String]
   },
+  videos: {
+    promotional: {
+      type: String,
+      default: ""
+    },
+    thumbnail: {
+      type: String,
+      default: ""
+    },
+    duration: {
+      type: Number,
+      default: 0
+    }
+  },
   nutritionInfo: {
     calories: {
       type: Number,
@@ -162,7 +176,7 @@ const menuItemSchema = new mongoose.Schema({
   },
   moodTag: {
     type: String,
-    enum: ['good', 'angry', 'in_love', 'sad'],
+    enum: ['locked_in', 'bougie', 'homesick', 'burnt_tf_out', 'need_a_hug'],
     default: null
   },
   hungerLevelTag: {
