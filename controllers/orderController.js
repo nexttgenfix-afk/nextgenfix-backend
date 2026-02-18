@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const { initiatePayment, verifyPayment } = require('../services/payment');
 const { createNotification } = require('../services/notification');
 const { updateUserTier } = require('../services/tier');
+const walletService = require('../services/walletService');
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -117,6 +118,53 @@ const createOrder = async (req, res) => {
 
     const finalAmount = totalAmount - discountAmount;
 
+    // Handle wallet payment
+    const { useWallet = false, walletAmount = 0 } = req.body;
+    let walletPaymentAmount = 0;
+    let walletTransactionId = null;
+    let remainingAmount = finalAmount;
+    let paidViaWallet = false;
+
+    if (useWallet && walletAmount > 0) {
+      try {
+        // Verify user has sufficient wallet balance
+        const balanceCheck = await walletService.verifyBalance(req.user.id, walletAmount);
+        if (!balanceCheck.hasBalance) {
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient wallet balance',
+            data: {
+              required: walletAmount,
+              available: balanceCheck.currentBalance,
+              shortfall: balanceCheck.shortfall
+            }
+          });
+        }
+
+        // Debit from wallet
+        const walletResult = await walletService.debitWallet(
+          req.user.id,
+          walletAmount,
+          'order_payment',
+          `Payment for order using wallet`,
+          {
+            reason: 'Order payment'
+          }
+        );
+
+        walletPaymentAmount = walletAmount;
+        walletTransactionId = walletResult.transaction.transactionId;
+        remainingAmount = finalAmount - walletPaymentAmount;
+        if (remainingAmount < 0) remainingAmount = 0;
+        paidViaWallet = true;
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: 'Wallet payment failed: ' + error.message
+        });
+      }
+    }
+
     // Create order
     const order = await Order.create({
       user: req.user.id,
@@ -125,9 +173,15 @@ const createOrder = async (req, res) => {
       billing: {
         subtotal: totalAmount,
         discounts: {
-          totalDiscount: discountAmount
+          totalDiscount: discountAmount,
+          walletPayment: {
+            amount: walletPaymentAmount,
+            transactionId: walletTransactionId
+          }
         },
-        totalAmount: finalAmount
+        totalAmount: finalAmount,
+        remainingAmount,
+        paidViaWallet
       },
       deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
       tableNumber: orderType === 'on_site_dining' ? tableNumber : undefined,
@@ -350,10 +404,30 @@ const cancelOrder = async (req, res) => {
     }
 
     // Check if order can be cancelled
-    if (!['pending', 'confirmed'].includes(order.status)) {
+    if (!['pending', 'confirmed', 'placed'].includes(order.status)) {
       return res.status(400).json({
         message: 'Order cannot be cancelled at this stage'
       });
+    }
+
+    // Refund wallet payment if applicable
+    if (order.billing?.paidViaWallet && order.billing?.discounts?.walletPayment?.amount > 0) {
+      try {
+        const refundAmount = order.billing.discounts.walletPayment.amount;
+        await walletService.creditWallet(
+          order.user,
+          refundAmount,
+          'refund',
+          `Refund for cancelled order #${order.orderNumber}`,
+          {
+            orderId: order._id,
+            reason: 'Order cancellation'
+          }
+        );
+      } catch (error) {
+        console.error('Wallet refund error:', error.message);
+        // Continue with cancellation even if refund fails
+      }
     }
 
     // Update order status

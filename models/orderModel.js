@@ -9,7 +9,7 @@ const orderSchema = new mongoose.Schema({
   },
   orderType: {
     type: String,
-    enum: ['on_site_dining', 'delivery'],
+    enum: ['delivery', 'take_away', 'car'],
     required: true
   },
   dayPart: {
@@ -96,6 +96,16 @@ const orderSchema = new mongoose.Schema({
           default: 0
         }
       },
+      walletPayment: {
+        amount: {
+          type: Number,
+          default: 0
+        },
+        transactionId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'WalletTransaction'
+        }
+      },
       totalDiscount: {
         type: Number,
         default: 0
@@ -120,6 +130,16 @@ const orderSchema = new mongoose.Schema({
     totalAmount: {
       type: Number,
       required: true
+    },
+    remainingAmount: {
+      type: Number,
+      default: function() {
+        return this.totalAmount || 0;
+      }
+    },
+    paidViaWallet: {
+      type: Boolean,
+      default: false
     }
   },
   // Original fields
