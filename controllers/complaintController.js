@@ -447,6 +447,271 @@ exports.deleteComplaint = async (req, res) => {
  * Export complaints to CSV (Admin only)
  * GET /api/complaints/admin/export
  */
+/**
+ * Add response to complaint (new approach with responses array)
+ * POST /api/complaints/:id/respond
+ */
+exports.addComplaintResponse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message, isInternal = false } = req.body;
+    const adminId = req.adminId;
+
+    // Validate input
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Response message is required'
+      });
+    }
+
+    // Find complaint
+    const query = buildComplaintQuery(id);
+    const complaint = await Complaint.findOne(query);
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+
+    // Get admin details
+    let adminName = 'Support Team';
+    try {
+      const Admin = require('../models/adminModel');
+      const admin = await Admin.findById(adminId).select('name');
+      if (admin) adminName = admin.name;
+    } catch (e) {
+      console.error('Error fetching admin details:', e.message);
+    }
+
+    // Add response
+    complaint.responses.push({
+      adminId,
+      adminName,
+      message,
+      isInternal,
+      createdAt: new Date()
+    });
+
+    // Update lastResponseAt
+    complaint.lastResponseAt = new Date();
+
+    // If not internal note, update status to In-progress
+    if (!isInternal && complaint.status === 'Open') {
+      complaint.status = 'In-progress';
+    }
+
+    await complaint.save();
+
+    // Populate responses for response
+    await complaint.populate('responses.adminId', 'name email');
+
+    res.status(200).json({
+      success: true,
+      message: 'Response added successfully',
+      data: complaint
+    });
+  } catch (error) {
+    console.error('Error adding response:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add response',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Assign complaint to admin
+ * PUT /api/complaints/:id/assign
+ */
+exports.assignComplaint = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { adminId } = req.body;
+
+    if (!adminId) {
+      return res.status(400).json({
+        success: false,
+        message: 'adminId is required'
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(adminId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid admin ID'
+      });
+    }
+
+    const query = buildComplaintQuery(id);
+    const complaint = await Complaint.findOneAndUpdate(
+      query,
+      { assignedTo: adminId },
+      { new: true }
+    ).populate('assignedTo', 'name email');
+
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'Complaint not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Complaint assigned successfully',
+      data: complaint
+    });
+  } catch (error) {
+    console.error('Error assigning complaint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign complaint',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get complaint statistics
+ * GET /api/admin/complaints/stats
+ */
+exports.getComplaintStats = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const matchStage = {};
+    if (startDate || endDate) {
+      matchStage.createdAt = {};
+      if (startDate) {
+        matchStage.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        matchStage.createdAt.$lte = new Date(endDate);
+      }
+    }
+
+    // Total complaints
+    const total = await Complaint.countDocuments();
+
+    // By status
+    const byStatus = await Complaint.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
+    // By category
+    const byCategory = await Complaint.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: '$category',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      }
+    ]);
+
+    // By priority
+    const byPriority = await Complaint.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: '$priority',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
+    // Average resolution time
+    const resolutionTimes = await Complaint.aggregate([
+      {
+        $match: {
+          ...matchStage,
+          resolvedAt: { $exists: true }
+        }
+      },
+      {
+        $project: {
+          resolutionTime: {
+            $subtract: ['$resolvedAt', '$createdAt']
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          avgResolutionTime: { $avg: '$resolutionTime' }
+        }
+      }
+    ]);
+
+    // Open complaints
+    const openComplaints = await Complaint.countDocuments({
+      status: { $in: ['Open', 'In-progress'] }
+    });
+
+    // Resolved complaints
+    const resolvedComplaints = await Complaint.countDocuments({
+      status: 'Resolved'
+    });
+
+    const statusMap = {};
+    byStatus.forEach(item => {
+      statusMap[item._id] = item.count;
+    });
+
+    const categoryMap = {};
+    byCategory.forEach(item => {
+      categoryMap[item._id] = item.count;
+    });
+
+    const priorityMap = {};
+    byPriority.forEach(item => {
+      priorityMap[item._id] = item.count;
+    });
+
+    const avgResolutionTimeMs = resolutionTimes[0]?.avgResolutionTime || 0;
+    const avgResolutionTimeHours = Math.round(avgResolutionTimeMs / (1000 * 60 * 60));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        total,
+        openComplaints,
+        resolvedComplaints,
+        byStatus: statusMap,
+        byCategory: categoryMap,
+        byPriority: priorityMap,
+        avgResolutionTimeHours
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching complaint stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch complaint statistics',
+      error: error.message
+    });
+  }
+};
+
 exports.exportComplaints = async (req, res) => {
   try {
     const { status, category, priority, from, to } = req.query;

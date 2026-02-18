@@ -22,6 +22,7 @@ router.get('/:id', verifyToken, complaintController.getComplaintById);
 
 // Admin routes with parameters
 router.put('/:id/status', verifyAdmin, complaintController.updateComplaintStatus);
-router.put('/:id/respond', verifyAdmin, complaintController.respondToComplaint);
+router.post('/:id/respond', verifyAdmin, complaintController.addComplaintResponse);
+router.put('/:id/assign', verifyAdmin, complaintController.assignComplaint);
 
 module.exports = router;
