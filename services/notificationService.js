@@ -35,7 +35,7 @@ const notificationService = {
       const notificationRef = db.ref(`notifications/${userId}`).push();
       await notificationRef.set({
         ...notification,
-        timestamp: admin.database.ServerValue.TIMESTAMP,
+        timestamp: Date.now(),
         read: false
       });
       
@@ -88,7 +88,7 @@ const notificationService = {
           const notifKey = db.ref(`notifications/${user._id}`).push().key;
           dbUpdates[`notifications/${user._id}/${notifKey}`] = {
             ...notification,
-            timestamp: admin.database.ServerValue.TIMESTAMP,
+            timestamp: Date.now(),
             read: false
           };
         }

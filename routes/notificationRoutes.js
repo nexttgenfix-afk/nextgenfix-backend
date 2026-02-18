@@ -8,10 +8,10 @@ const { verifyAdmin } = require('../middlewares/adminAuth');
 router.get('/', verifyToken, notificationController.getMyNotifications);
 router.get('/paginated', verifyToken, notificationController.getNotificationsPaginated);
 router.get('/count', verifyToken, notificationController.getNotificationCount);
-router.put('/:id/read', verifyToken, notificationController.markNotificationRead);
+router.put('/:notificationId/read', verifyToken, notificationController.markNotificationRead);
 router.put('/read-all', verifyToken, notificationController.markAllNotificationsRead);
 router.put('/fcm-token', verifyToken, notificationController.updateFcmToken);
-router.delete('/:id', verifyToken, notificationController.deleteNotification);
+router.delete('/:notificationId', verifyToken, notificationController.deleteNotification);
 router.delete('/', verifyToken, notificationController.deleteAllNotifications);
 
 // Topic management

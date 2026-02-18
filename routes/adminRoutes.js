@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const walletController = require('../controllers/walletController');
 const { verifyAdmin } = require('../middlewares/adminAuth');
 const { validateRegistration } = require('../middlewares/validation');
 const { uploadMenuItemPhoto } = require('../config/cloudinary');
+const { uploadSingleVideo, handleMulterError } = require('../middlewares/upload');
 
 // Import analytics routes
 const analyticsRoutes = require('./analyticsRoutes');
@@ -169,4 +171,37 @@ router.get('/recent-orders', verifyAdmin, adminController.getRecentOrders);
 router.get('/reviews-pending', verifyAdmin, adminController.getReviewsPendingModeration);
 router.put('/reviews/:reviewId/approve', verifyAdmin, adminController.approveReview);
 router.put('/reviews/:reviewId/reject', verifyAdmin, adminController.rejectReview);
+
+// User addresses
+router.get('/users/:userId/locations', verifyAdmin, adminController.getUserAddresses);
+
+// User cancelled orders
+router.get('/users/:userId/cancelled-orders', verifyAdmin, adminController.getUserCancelledOrders);
+
+// Abandoned carts
+router.get('/carts/abandoned', verifyAdmin, adminController.getAbandonedCarts);
+
+// --- Wallet Management ---
+// Get specific user's wallet details
+router.get('/wallet/user/:userId', verifyAdmin, walletController.getUserWallet);
+
+// Add bonus to user wallet
+router.post('/wallet/add-bonus', verifyAdmin, walletController.addWalletBonus);
+
+// Deduct amount from user wallet
+router.post('/wallet/deduct', verifyAdmin, walletController.deductWalletAmount);
+
+// Get platform-wide wallet statistics
+router.get('/wallet/stats', verifyAdmin, walletController.getWalletStats);
+
+// Search users by name or phone number
+router.get('/wallet/search', verifyAdmin, walletController.searchUsers);
+
+// --- Video Management ---
+// Upload video to menu item
+router.post('/menu-items/:menuItemId/video', verifyAdmin, uploadSingleVideo, handleMulterError, adminController.uploadMenuItemVideo);
+
+// Delete video from menu item
+router.delete('/menu-items/:menuItemId/video', verifyAdmin, adminController.deleteMenuItemVideo);
+
 module.exports = router;

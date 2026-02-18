@@ -4,6 +4,8 @@ const Order = require('../models/orderModel');
 const Restaurant = require('../models/restaurantModel');
 const Complaint = require('../models/complaintModel');
 const MenuItem = require('../models/menuItemModel');
+const Cart = require('../models/cartModel');
+const { Location } = require('../models/locationModel');
 const { generateToken } = require('../services/auth');
 const { sendEmail } = require('../services/email');
 const bcrypt = require('bcryptjs');
@@ -803,23 +805,59 @@ exports.deleteComplaint = async (req, res) => {
 // List all orders sorted from newest to oldest
 exports.getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
+    const { search, status, page = 1, limit = 100 } = req.query;
+    const query = {};
+
+    // Status filter
+    if (status) {
+      const statusMap = {
+        ordered: 'placed',
+        preparing: 'preparing',
+        dispatched: 'out-for-delivery',
+        delivered: 'delivered',
+        canceled: 'cancelled',
+        cancelled: 'cancelled',
+      };
+      query.status = statusMap[status.toLowerCase()] || status;
+    }
+
+    let orders;
+    if (search) {
+      // First find users matching the search term
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { phone: { $regex: search, $options: 'i' } },
+        ]
+      }).select('_id').lean();
+
+      const userIds = matchingUsers.map(u => u._id);
+
+      // Search by user match or order ID
+      const searchConditions = [{ user: { $in: userIds } }];
+      if (search.match(/^[0-9a-fA-F]{24}$/)) {
+        searchConditions.push({ _id: search });
+      }
+      query.$or = searchConditions;
+    }
+
+    orders = await Order.find(query)
       .populate('user', 'name email phone')
       .populate({
         path: 'items.itemId',
         select: 'name price'
       })
       .sort({ createdAt: -1 })
-      .lean(); // Use lean for better performance
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .lean();
 
     // Transform orders to include formatted address string
     const formattedOrders = orders.map(order => {
-      // Create a temporary order instance to access virtuals
       const orderDoc = new Order(order);
-      
       return {
         ...order,
-        // Override deliveryAddress with formatted string from virtual
         deliveryAddress: orderDoc.formattedDeliveryAddress || order.deliveryAddress || ''
       };
     });
@@ -1588,25 +1626,39 @@ exports.exportUsers = async (req, res) => {
 // Add user (admin action)
 exports.addUser = async (req, res) => {
   try {
-    const { name, email, phone, password, preferences, status, dietPreference, eatingPreference } = req.body;
-    if (!name || !email || !phone || !password) {
-      return res.status(400).json({ message: 'Name, email, phone, and password are required' });
+    const { name, email, phone, password, preferences, status, dietPreference, eatingPreference, tier, calorieGoal, allergens, referredByCode } = req.body;
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required' });
     }
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ message: 'User with this email already exists' });
+    if (email) {
+      const existing = await User.findOne({ email });
+      if (existing) {
+        return res.status(400).json({ message: 'User with this email already exists' });
+      }
     }
-    const hash = await bcrypt.hash(password, 10);
     const userData = {
       name,
       email,
       phone,
-      password: hash,
-      preferences,
       status: status || 'Active'
     };
+    if (password) {
+      userData.password = await bcrypt.hash(password, 10);
+    }
+    if (preferences) userData.preferences = preferences;
+    if (allergens) {
+      userData.preferences = { ...(userData.preferences || {}), allergens: Array.isArray(allergens) ? allergens : allergens.split(',').map(a => a.trim()).filter(Boolean) };
+    }
     if (dietPreference) userData.dietPreference = dietPreference;
     if (eatingPreference) userData.eatingPreference = eatingPreference;
+    if (tier) userData.tier = tier;
+    if (calorieGoal) userData.calorieGoal = Number(calorieGoal);
+    if (referredByCode) {
+      const referrer = await User.findOne({ referralCode: referredByCode });
+      if (referrer) {
+        userData.referredBy = referrer._id;
+      }
+    }
     const user = await User.create(userData);
     res.status(201).json({ message: 'User created', user: { ...user.toObject(), password: undefined } });
   } catch (err) {
@@ -1835,6 +1887,120 @@ exports.rejectReview = async (req, res) => {
   }
 };
 
+// Get user addresses
+exports.getUserAddresses = async (req, res) => {
+  try {
+    const locations = await Location.find({ user: req.params.userId }).sort({ isDefault: -1, lastUsed: -1 }).lean();
+    res.status(200).json({ success: true, locations });
+  } catch (err) {
+    console.error('Get user addresses error:', err);
+    res.status(500).json({ message: 'Failed to fetch user addresses' });
+  }
+};
+
+// Get abandoned carts
+exports.getAbandonedCarts = async (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const carts = await Cart.find({ status: 'abandoned' })
+      .populate('user', 'name email phone')
+      .populate('items.menuItem', 'name price')
+      .sort({ abandonedAt: -1 })
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .lean();
+    const total = await Cart.countDocuments({ status: 'abandoned' });
+    res.status(200).json({ success: true, carts, total });
+  } catch (err) {
+    console.error('Get abandoned carts error:', err);
+    res.status(500).json({ message: 'Failed to fetch abandoned carts' });
+  }
+};
+
+// Get user cancelled orders
+exports.getUserCancelledOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ user: req.params.userId, status: 'cancelled' })
+      .populate('items.itemId', 'name price')
+      .sort({ createdAt: -1 })
+      .lean();
+    res.status(200).json({ success: true, orders });
+  } catch (err) {
+    console.error('Get user cancelled orders error:', err);
+    res.status(500).json({ message: 'Failed to fetch cancelled orders' });
+  }
+};
+
+// Upload video to menu item
+exports.uploadMenuItemVideo = async (req, res) => {
+  try {
+    const { menuItemId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No video file uploaded' });
+    }
+
+    const menuItem = await MenuItem.findById(menuItemId);
+    if (!menuItem) {
+      return res.status(404).json({ success: false, message: 'Menu item not found' });
+    }
+
+    // Get video URL from Cloudinary
+    const videoUrl = req.file.path;
+
+    // Generate thumbnail URL (Cloudinary transformation to extract first frame)
+    const thumbnailUrl = videoUrl.replace('/video/', '/video/w_200,h_200,c_crop/').replace(/\.\w+$/, '.jpg');
+
+    // Update menu item with video
+    menuItem.videos.promotional = videoUrl;
+    menuItem.videos.thumbnail = thumbnailUrl;
+    menuItem.videos.duration = req.file.duration || 0;
+
+    await menuItem.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Video uploaded successfully',
+      data: {
+        videoUrl,
+        thumbnailUrl,
+        menuItem
+      }
+    });
+  } catch (error) {
+    console.error('Upload menu item video error:', error);
+    res.status(500).json({ success: false, message: 'Failed to upload video', error: error.message });
+  }
+};
+
+// Delete video from menu item
+exports.deleteMenuItemVideo = async (req, res) => {
+  try {
+    const { menuItemId } = req.params;
+
+    const menuItem = await MenuItem.findById(menuItemId);
+    if (!menuItem) {
+      return res.status(404).json({ success: false, message: 'Menu item not found' });
+    }
+
+    // Clear video fields
+    menuItem.videos.promotional = '';
+    menuItem.videos.thumbnail = '';
+    menuItem.videos.duration = 0;
+
+    await menuItem.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Video deleted successfully',
+      data: { menuItem }
+    });
+  } catch (error) {
+    console.error('Delete menu item video error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete video', error: error.message });
+  }
+};
+
 // Export all functions at the end of the file
 module.exports = {
   registerAdmin: exports.registerAdmin,
@@ -1891,6 +2057,11 @@ module.exports = {
   addUser: exports.addUser,
   getReviewsPendingModeration: exports.getReviewsPendingModeration,
   getRecentOrders: exports.getRecentOrders,
-  getOverviewMetrics: exports.getOverviewMetrics
+  getOverviewMetrics: exports.getOverviewMetrics,
+  getUserAddresses: exports.getUserAddresses,
+  getAbandonedCarts: exports.getAbandonedCarts,
+  getUserCancelledOrders: exports.getUserCancelledOrders,
+  uploadMenuItemVideo: exports.uploadMenuItemVideo,
+  deleteMenuItemVideo: exports.deleteMenuItemVideo
 };
 ;
