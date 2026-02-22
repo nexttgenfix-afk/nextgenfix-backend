@@ -3,26 +3,24 @@ const router = express.Router();
 const homeController = require('../controllers/homeController');
 const { optionalAuth } = require('../middlewares/auth');
 
-// Helper to guard against undefined or non-function handlers
-const handler = (fn) => {
-	if (typeof fn === 'function') return fn;
-	// return a placeholder handler that indicates the endpoint isn't implemented yet
-	return (req, res) => res.status(501).json({ message: 'Not implemented' });
-};
+// All home routes use optional auth (user favorites shown if logged in)
 
-// Public routes (no auth required)
-router.get('/featured', handler(homeController.getFeaturedItems));
-router.get('/categories', handler(homeController.getCategories));
-router.get('/banners', handler(homeController.getBanners));
-router.get('/trending', handler(homeController.getTrendingItems));
-router.get('/nearby', optionalAuth, handler(homeController.getNearbyItems));
-router.get('/recommendations', optionalAuth, handler(homeController.getPersonalizedRecommendations));
+// Menu items with filter support (?filter=today-special|pure-veg|high-protein|salads|thali|popular)
+router.get('/menu-items', optionalAuth, homeController.getMenuItems);
 
-// Search functionality
-router.get('/search', handler(homeController.searchItems));
+// Popular dishes
+router.get('/popular-dishes', optionalAuth, homeController.getPopularDishes);
 
-// Location-based routes
-router.get('/location/restaurants', optionalAuth, handler(homeController.getRestaurantsByLocation));
-router.get('/location/chefs', optionalAuth, handler(homeController.getChefsByLocation));
+// Categories
+router.get('/categories', homeController.getCategories);
+
+// Banners
+router.get('/banners', homeController.getBanners);
+
+// Search menu items
+router.get('/search', homeController.searchItems);
+
+// Menu item detail page
+router.get('/items/:itemId', optionalAuth, homeController.getMenuItemDetails);
 
 module.exports = router;

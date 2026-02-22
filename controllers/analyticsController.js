@@ -1328,8 +1328,7 @@ const getCustomerLifetimeValue = async (req, res) => {
         $group: {
           _id: null,
           avgLTV: { $avg: '$totalRevenue' },
-          // $median requires an object with an `input` field in aggregation pipelines
-          medianLTV: { $median: { input: '$totalRevenue' } },
+          ltvValues: { $push: '$totalRevenue' },
           totalCustomers: { $sum: 1 },
           avgOrdersPerCustomer: { $avg: '$orderCount' },
           avgCustomerLifespan: { $avg: '$customerLifespanDays' },
@@ -1351,11 +1350,30 @@ const getCustomerLifetimeValue = async (req, res) => {
 
     const ltvData = userLTV[0] || {
       avgLTV: 0,
-      medianLTV: 0,
+      ltvValues: [],
       totalCustomers: 0,
       avgOrdersPerCustomer: 0,
       avgCustomerLifespan: 0
     };
+
+    // Compute median in JS (avoids $median which requires MongoDB 7.0+)
+    const sortedLTVs = (ltvData.ltvValues || []).slice().sort((a, b) => a - b);
+    const medianLTV = sortedLTVs.length > 0
+      ? sortedLTVs[Math.floor(sortedLTVs.length / 2)]
+      : 0;
+
+    // Compute LTV distribution buckets from sorted values
+    const ltvBuckets = [
+      { range: '0-500', min: 0, max: 500 },
+      { range: '500-1000', min: 500, max: 1000 },
+      { range: '1000-2500', min: 1000, max: 2500 },
+      { range: '2500-5000', min: 2500, max: 5000 },
+      { range: '5000+', min: 5000, max: Infinity }
+    ];
+    const ltvDistribution = ltvBuckets.map(({ range, min, max }) => ({
+      range,
+      count: sortedLTVs.filter(v => v >= min && v < max).length
+    }));
 
     // Calculate LTV by gender
     const genderLTV = await Order.aggregate([
@@ -1440,10 +1458,11 @@ const getCustomerLifetimeValue = async (req, res) => {
 
     const metrics = {
       avgLTV: Math.round(ltvData.avgLTV * 100) / 100,
-      medianLTV: Math.round(ltvData.medianLTV * 100) / 100,
+      medianLTV: Math.round(medianLTV * 100) / 100,
       totalCustomers: ltvData.totalCustomers,
       avgOrdersPerCustomer: Math.round(ltvData.avgOrdersPerCustomer * 100) / 100,
-      avgCustomerLifespanDays: Math.round(ltvData.avgCustomerLifespan * 100) / 100
+      avgCustomerLifespanDays: Math.round(ltvData.avgCustomerLifespan * 100) / 100,
+      ltvDistribution
     };
 
     await setCachedMetric(cacheKey, 'Customer LTV', metrics, breakdown, [], 'daily');
