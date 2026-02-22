@@ -22,7 +22,7 @@ const requireGuestOrUser = async (req, res, next) => {
     }
 
     // Verify token
-    const decoded = authService.verifyToken(token);
+    const decoded = await authService.verifyToken(token);
 
     // Get user from database
     const user = await User.findById(decoded.userId).select('-password');
@@ -67,7 +67,7 @@ const optionalAuth = async (req, res, next) => {
     const token = authService.extractToken(authHeader);
 
     if (token) {
-      const decoded = authService.verifyToken(token);
+      const decoded = await authService.verifyToken(token);
       const user = await User.findById(decoded.userId).select('-password');
 
       if (user) {
@@ -105,7 +105,7 @@ const requireAuth = async (req, res, next) => {
       });
     }
 
-    const decoded = authService.verifyToken(token);
+    const decoded = await authService.verifyToken(token);
     const user = await User.findById(decoded.userId).select('-password');
 
     if (!user) {

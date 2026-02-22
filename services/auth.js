@@ -1,7 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-// In-memory token blacklist (in production, use Redis)
-const blacklistedTokens = new Set();
+const redisClient = require('../config/redisClient');
 
 module.exports = {
   /**
@@ -47,10 +45,10 @@ module.exports = {
    * @param {String} token - JWT token
    * @returns {Object} Decoded token payload
    */
-  verifyToken(token) {
+  async verifyToken(token) {
     try {
-      // Check if token is blacklisted
-      if (blacklistedTokens.has(token)) {
+      // Check if token is blacklisted in Redis
+      if (await this.isTokenBlacklisted(token)) {
         throw new Error('Token has been revoked');
       }
 
@@ -62,16 +60,18 @@ module.exports = {
   },
 
   /**
-   * Blacklist a token (logout)
+   * Blacklist a token (logout) — stored in Redis with TTL matching token expiry
    * @param {String} token - JWT token to blacklist
    */
-  blacklistToken(token) {
-    blacklistedTokens.add(token);
-    
-    // Auto-remove from blacklist after token expiry (7 days default)
-    setTimeout(() => {
-      blacklistedTokens.delete(token);
-    }, 7 * 24 * 60 * 60 * 1000);
+  async blacklistToken(token) {
+    const decoded = jwt.decode(token);
+    const ttl = decoded?.exp
+      ? decoded.exp - Math.floor(Date.now() / 1000)
+      : 7 * 24 * 60 * 60;
+
+    if (ttl > 0) {
+      await redisClient.set(`bl:${token}`, '1', { EX: ttl });
+    }
   },
 
   /**
@@ -79,8 +79,9 @@ module.exports = {
    * @param {String} token - JWT token
    * @returns {Boolean}
    */
-  isTokenBlacklisted(token) {
-    return blacklistedTokens.has(token);
+  async isTokenBlacklisted(token) {
+    const result = await redisClient.exists(`bl:${token}`);
+    return result === 1;
   },
 
   /**

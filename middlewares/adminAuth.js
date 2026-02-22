@@ -32,7 +32,7 @@ const verifyAdmin = async (req, res, next) => {
     // Verify token and inspect payload for debugging
     let decoded;
     try {
-      decoded = authService.verifyToken(token);
+      decoded = await authService.verifyToken(token);
       console.debug('[verifyAdmin] token decoded:', decoded);
     } catch (err) {
       console.warn('[verifyAdmin] token verification failed:', err.message);
