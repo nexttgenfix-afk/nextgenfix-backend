@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
   },
   authProvider: {
     type: String,
-    enum: ['phone', 'google', 'apple', 'guest'],
+    enum: ['phone', 'whatsapp', 'google', 'apple', 'guest'],
     default: 'guest'
   },
   
@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema({
   },
   preferredLoginMethod: {
     type: String,
-    enum: ['OTP', 'Google', 'Apple', 'Guest'],
+    enum: ['OTP', 'WhatsApp', 'Google', 'Apple', 'Guest'],
     default: 'OTP'
   },
   // Local password for non-Firebase/email signups (optional)

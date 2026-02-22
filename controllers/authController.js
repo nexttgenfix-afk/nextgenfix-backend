@@ -44,7 +44,7 @@ const register = async (req, res) => {
     if (guestToken) {
       try {
         const guestService = require('../services/guestService');
-        const decoded = verifyToken(guestToken);
+        const decoded = await verifyToken(guestToken);
         const guestUser = await User.findById(decoded.userId);
 
         if (guestUser && guestUser.isGuest) {
@@ -104,7 +104,7 @@ const login = async (req, res) => {
     if (guestToken) {
       try {
         const guestService = require('../services/guestService');
-        const decoded = verifyToken(guestToken);
+        const decoded = await verifyToken(guestToken);
         const guestUser = await User.findById(decoded.userId);
 
         if (guestUser && guestUser.isGuest) {
@@ -195,7 +195,7 @@ const verifyOTP = async (req, res) => {
     if (guestToken) {
       try {
         const guestService = require('../services/guestService');
-        const decoded = verifyToken(guestToken);
+        const decoded = await verifyToken(guestToken);
         const guestUser = await User.findById(decoded.userId);
 
         if (guestUser && guestUser.isGuest) {
@@ -376,19 +376,6 @@ const createGuest = async (req, res) => {
     console.error('Error creating guest:', err);
     return res.status(500).json({ message: 'Failed to create guest session' });
   }
-};
-
-module.exports = {
-  register,
-  login,
-  verifyOTP,
-  resendOTP,
-  createGuest,
-  refreshToken,
-  logout,
-  forgotPassword,
-  resetPassword,
-  verifyFirebaseToken
 };
 
 const Cart = require('../models/cartModel');
@@ -849,6 +836,121 @@ exports.verifyToken = async (req, res) => {
   }
 };
 
+/**
+ * Send WhatsApp OTP via MSG91
+ *
+ * POST /api/auth/whatsapp/send-otp
+ * Body: { phone }
+ */
+const sendWhatsappOtp = async (req, res) => {
+  try {
+    let { phone } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+
+    // Sanitize: strip leading '+' and whitespace
+    phone = phone.replace(/^\+/, '').replace(/\s+/g, '');
+
+    // Validate: digits only, minimum 10 chars
+    if (!/^\d{10,}$/.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone must be digits only and at least 10 characters'
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in Redis with 5-minute TTL
+    const redisClient = require('../config/redisClient');
+    await redisClient.set('wa_otp:' + phone, otp, { EX: 300 });
+
+    // Send via MSG91
+    const msg91Service = require('../services/msg91');
+    await msg91Service.sendWhatsappOtp(phone, otp);
+
+    return res.status(200).json({ success: true, message: 'OTP sent via WhatsApp' });
+  } catch (error) {
+    console.error('sendWhatsappOtp error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send OTP' });
+  }
+};
+
+/**
+ * Verify WhatsApp OTP and issue JWT
+ *
+ * POST /api/auth/whatsapp/verify-otp
+ * Body: { phone, otp }
+ */
+const verifyWhatsappOtp = async (req, res) => {
+  try {
+    let { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res.status(400).json({ success: false, message: 'Phone and OTP are required' });
+    }
+
+    // Sanitize phone
+    phone = phone.replace(/^\+/, '').replace(/\s+/g, '');
+
+    const redisClient = require('../config/redisClient');
+    const storedOtp = await redisClient.get('wa_otp:' + phone);
+
+    if (!storedOtp) {
+      return res.status(400).json({ success: false, message: 'OTP expired or not requested' });
+    }
+
+    if (storedOtp !== otp.toString()) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    // Single-use: delete from Redis
+    await redisClient.del('wa_otp:' + phone);
+
+    // Find or create user
+    let user = await User.findOne({ phone });
+    if (!user) {
+      user = await User.create({
+        phone,
+        phoneVerified: true,
+        name: `User${phone.slice(-4)}`,
+        authProvider: 'whatsapp',
+        isGuest: false,
+        referralCode: generateReferralCode()
+      });
+      console.log('✅ New WhatsApp user created:', user._id);
+    } else {
+      user.phoneVerified = true;
+      user.lastActive = new Date();
+      await user.save();
+      console.log('✅ Existing WhatsApp user logged in:', user._id);
+    }
+
+    const token = generateToken(user._id, 'user');
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+        name: user.name,
+        tier: user.tier,
+        referralCode: user.referralCode,
+        authProvider: user.authProvider,
+        isGuest: user.isGuest
+      }
+    });
+  } catch (error) {
+    console.error('verifyWhatsappOtp error:', error);
+    return res.status(500).json({ success: false, message: 'OTP verification failed' });
+  }
+};
+
 // Export all controller handlers from a single object to avoid mixing
 // `module.exports = {}` and `exports.foo = ...` which breaks the exports link.
 module.exports = {
@@ -862,6 +964,8 @@ module.exports = {
   forgotPassword,
   resetPassword,
   verifyFirebaseToken,
+  sendWhatsappOtp,
+  verifyWhatsappOtp,
   // Explicitly include the later-defined handlers
   phoneLogin: exports.phoneLogin,
   googleLogin: exports.googleLogin,

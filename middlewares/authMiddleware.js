@@ -36,11 +36,7 @@ exports.protect = async (req, res, next) => {
         return res.status(401).json({ message: "Not authorized, token failed" });
       }
       // Try to find user by cognitoId
-      let user = await User.findOne({ cognitoId: decoded.sub }).select('-password');
-      if (!user) {
-        // Try to find chef by cognitoId
-        user = await Chef.findOne({ cognitoId: decoded.sub });
-      }
+      const user = await User.findOne({ cognitoId: decoded.sub }).select('-password');
       if (!user) {
         return res.status(401).json({ message: "User not found" });
       }

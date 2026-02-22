@@ -21,4 +21,8 @@ router.post('/reset-password', generalLimiter, authController.resetPassword);
 // Social auth routes (Firebase)
 router.post('/firebase/verify', authController.verifyFirebaseToken);
 
+// WhatsApp OTP routes (MSG91)
+router.post('/whatsapp/send-otp', generalLimiter, authController.sendWhatsappOtp);
+router.post('/whatsapp/verify-otp', generalLimiter, authController.verifyWhatsappOtp);
+
 module.exports = router;
