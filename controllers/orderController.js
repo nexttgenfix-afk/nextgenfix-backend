@@ -310,32 +310,6 @@ const createOrder = async (req, res) => {
       console.error('Error marking referral reward claimed:', e.message);
     }
 
-    // Update menu item order counts
-    for (const item of cart.items) {
-      await MenuItem.findByIdAndUpdate(item.menuItem._id, {
-        $inc: { orderCount: item.quantity }
-      });
-    }
-
-    // Create notification
-    await createNotification({
-      userId: req.user.id,
-      title: 'Order Placed',
-      message: `Your order #${order.orderNumber} has been placed successfully`,
-      type: 'order',
-      data: { orderId: order._id }
-    });
-
-    // Populate order details
-    await order.populate([
-      { path: 'items.menuItem', select: 'name image' },
-      { path: 'userId', select: 'name phone' }
-    ]);
-
-    res.status(201).json({
-      message: 'Order created successfully',
-      order
-    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

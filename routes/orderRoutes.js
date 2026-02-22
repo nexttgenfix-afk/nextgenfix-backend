@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/orderController');
-const { verifyToken } = require('../middlewares/auth');
+const { requireAuth } = require('../middlewares/unifiedAuth');
 const { validateOrder } = require('../middlewares/validation');
 const { verifyAdmin } = require('../middlewares/adminAuth');
 
@@ -10,22 +10,22 @@ router.get('/admin/all', verifyAdmin, orderController.getAllOrders);
 router.get('/admin/stats', verifyAdmin, orderController.getOrderStats);
 
 // Create new order
-router.post('/', verifyToken, validateOrder, orderController.createOrder);
+router.post('/', requireAuth, validateOrder, orderController.createOrder);
 
 // Get user's orders
-router.get('/', verifyToken, orderController.getUserOrders);
+router.get('/', requireAuth, orderController.getUserOrders);
 
 // Get order by ID
-router.get('/:id', verifyToken, orderController.getOrderById);
+router.get('/:id', requireAuth, orderController.getOrderById);
 
 // Cancel order
-router.put('/:id/cancel', verifyToken, orderController.cancelOrder);
+router.put('/:id/cancel', requireAuth, orderController.cancelOrder);
 
 // Get order tracking
-router.get('/:id/tracking', verifyToken, orderController.getOrderTracking);
+router.get('/:id/tracking', requireAuth, orderController.getOrderTracking);
 
 // Reorder from previous order
-router.post('/:id/reorder', verifyToken, orderController.reorder);
+router.post('/:id/reorder', requireAuth, orderController.reorder);
 
 // Update order status (admin only)
 router.put('/:id/status', verifyAdmin, orderController.updateOrderStatus);

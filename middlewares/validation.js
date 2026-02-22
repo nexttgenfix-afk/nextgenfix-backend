@@ -133,8 +133,9 @@ const validateMenuItem = [
  */
 const validateOrder = [
   body('items')
+    .optional()
     .isArray({ min: 1 })
-    .withMessage('Order must contain at least one item'),
+    .withMessage('Items must be a non-empty array if provided'),
   body('orderType')
     .isIn(['on_site_dining', 'delivery'])
     .withMessage('Order type must be on_site_dining or delivery'),
@@ -268,7 +269,7 @@ const validatePromoCode = [
  */
 const validateComplaint = [
   body('category')
-    .isIn(['food_quality', 'delivery_time', 'payment_issues', 'service', 'other'])
+    .isIn(['order_issue', 'delivery_issue', 'payment_issue', 'account_issue', 'technical_issue', 'menu_issue', 'general_inquiry', 'feedback'])
     .withMessage('Invalid complaint category'),
   body('subject')
     .trim()
@@ -411,6 +412,30 @@ const validateChefProfile = [
   handleValidationErrors
 ];
 
+/**
+ * Validation for rating submission
+ */
+const validateRating = [
+  param('orderId')
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Invalid order ID format'),
+  body('ratings')
+    .isArray({ min: 1 })
+    .withMessage('Ratings must be a non-empty array'),
+  body('ratings.*.menuItemId')
+    .matches(/^[0-9a-fA-F]{24}$/)
+    .withMessage('Invalid menu item ID format'),
+  body('ratings.*.rating')
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Rating must be between 1 and 5'),
+  body('ratings.*.comment')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Comment must be less than 500 characters'),
+  handleValidationErrors
+];
+
 module.exports = {
   handleValidationErrors,
   validateRegistration,
@@ -428,5 +453,6 @@ module.exports = {
   validatePromoCode,
   validateObjectId,
   validateProfileUpdate,
-  validateCategory
+  validateCategory,
+  validateRating
 };

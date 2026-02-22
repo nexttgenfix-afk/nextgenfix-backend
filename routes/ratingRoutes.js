@@ -8,7 +8,7 @@ const { validateRating } = require('../middlewares/validation');
 router.use(verifyToken);
 
 // Submit rating for an order
-// router.post('/orders/:orderId', validateRating, ratingController.submitOrderRating);
+router.post('/orders/:orderId', validateRating, ratingController.submitRating);
 
 // Get user's ratings
 router.get('/', ratingController.getUserRatings);
@@ -23,7 +23,7 @@ router.get('/', ratingController.getUserRatings);
 // router.put('/:id', validateRating, ratingController.updateRating);
 
 // Delete rating
-router.delete('/:id', ratingController.deleteRating);
+router.delete('/:ratingId', ratingController.deleteRating);
 
 // Admin routes
 const { verifyAdmin } = require('../middlewares/adminAuth');

@@ -1,97 +1,76 @@
 const Rating = require('../models/ratingModel');
 const Order = require('../models/orderModel');
-const Restaurant = require('../models/restaurantModel');
-const { uploadRatingImages } = require('../config/cloudinary');
 const mongoose = require('mongoose');
 
-// Submit a new rating
+// Submit ratings for an order (one rating per menu item)
 exports.submitRating = async (req, res) => {
   const userId = req.user.id;
-  const { 
-    orderId, 
-    rating, 
-    comment, 
-    tags = [] 
-  } = req.body;
-
-  // Validate required fields
-  if (!orderId || !rating) {
-    return res.status(400).json({ 
-      message: "Order ID and rating are required" 
-    });
-  }
-
-  // Validate rating range
-  const ratingValue = parseInt(rating);
-  if (isNaN(ratingValue) || ratingValue < 1 || ratingValue > 5) {
-    return res.status(400).json({ 
-      message: "Rating must be between 1 and 5" 
-    });
-  }
+  const { orderId } = req.params;
+  const { ratings } = req.body;
 
   try {
-    // Get order details to determine if it's for a restaurant or chef
+    // Get order details and verify ownership + delivered status
     const order = await Order.findOne({
       _id: orderId,
-      userId: userId,
-      status: 'delivered' // Only allow ratings for delivered orders
+      user: userId,
+      status: 'delivered'
     });
 
     if (!order) {
-      return res.status(404).json({ 
-        message: "Order not found or not eligible for rating" 
+      return res.status(404).json({
+        success: false,
+        message: "Order not found or not eligible for rating"
       });
     }
 
-    // Check if user has already rated this order
-    const existingRating = await Rating.findOne({
-      user: userId,
-      orderId: orderId
-    });
+    // Get the list of item IDs in this order
+    const orderItemIds = order.items.map(item => item.itemId.toString());
 
-    if (existingRating) {
-      return res.status(400).json({ 
-        message: "You have already submitted a rating for this order" 
-      });
+    // Validate all menuItemIds belong to this order
+    for (const r of ratings) {
+      if (!orderItemIds.includes(r.menuItemId)) {
+        return res.status(400).json({
+          success: false,
+          message: `Menu item ${r.menuItemId} is not part of this order`
+        });
+      }
     }
 
-    // Create the rating object
-    const ratingData = {
+    // Check for already-rated items in this order
+    const existingRatings = await Rating.find({
       user: userId,
       orderId: orderId,
-      rating: ratingValue,
-      comment: comment,
-      tags: tags
-    };
+      menuItemId: { $in: ratings.map(r => r.menuItemId) }
+    });
 
-    // Add images if uploaded
-    if (req.files && req.files.length > 0) {
-      ratingData.images = req.files.map(file => file.path);
-    }
-
-    // Set restaurantId based on order
-    if (order.restaurantId) {
-      ratingData.restaurantId = order.restaurantId;
-    } else {
-      return res.status(400).json({ 
-        message: "Invalid order: missing restaurant reference" 
+    if (existingRatings.length > 0) {
+      const alreadyRated = existingRatings.map(r => r.menuItemId.toString());
+      return res.status(400).json({
+        success: false,
+        message: "Some items have already been rated",
+        alreadyRated
       });
     }
 
-    // Create the rating
-    const newRating = new Rating(ratingData);
-    await newRating.save();
+    // Create rating documents
+    const ratingDocs = ratings.map(r => ({
+      user: userId,
+      orderId: orderId,
+      menuItemId: r.menuItemId,
+      rating: r.rating,
+      comment: r.comment || undefined
+    }));
 
-    // Update the restaurant average rating
-    await updateRestaurantRating(order.restaurantId);
+    const savedRatings = await Rating.insertMany(ratingDocs);
 
     res.status(201).json({
-      message: "Rating submitted successfully",
-      rating: newRating
+      success: true,
+      message: "Ratings submitted successfully",
+      data: savedRatings
     });
   } catch (err) {
     console.error("Submit rating error:", err);
-    res.status(500).json({ message: "Failed to submit rating", error: err.message });
+    res.status(500).json({ success: false, message: "Failed to submit rating", error: err.message });
   }
 };
 
@@ -188,7 +167,7 @@ exports.getUserRatings = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('restaurantId', 'name')
+      .populate('menuItemId', 'name price image')
       .populate('orderId', 'createdAt items');
 
     // Get total count for pagination
@@ -213,7 +192,7 @@ exports.getUserRatings = async (req, res) => {
 exports.editRating = async (req, res) => {
   const userId = req.user.id;
   const { ratingId } = req.params;
-  const { rating, comment, tags } = req.body;
+  const { rating, comment } = req.body;
 
   // Validate rating if provided
   if (rating) {
@@ -240,12 +219,6 @@ exports.editRating = async (req, res) => {
     const updateData = {};
     if (rating) updateData.rating = parseInt(rating);
     if (comment !== undefined) updateData.comment = comment;
-    if (tags) updateData.tags = tags;
-    
-    // Add new images if uploaded
-    if (req.files && req.files.length > 0) {
-      updateData.images = req.files.map(file => file.path);
-    }
 
     const updatedRating = await Rating.findByIdAndUpdate(
       ratingId,
@@ -253,14 +226,10 @@ exports.editRating = async (req, res) => {
       { new: true }
     );
 
-    // Update restaurant average rating
-    if (existingRating.restaurantId) {
-      await updateRestaurantRating(existingRating.restaurantId);
-    }
-
     res.status(200).json({
+      success: true,
       message: "Rating updated successfully",
-      rating: updatedRating
+      data: updatedRating
     });
   } catch (err) {
     console.error("Edit rating error:", err);
@@ -281,21 +250,14 @@ exports.deleteRating = async (req, res) => {
     });
 
     if (!existingRating) {
-      return res.status(404).json({ message: "Rating not found or not authorized" });
+      return res.status(404).json({ success: false, message: "Rating not found or not authorized" });
     }
-
-    // Store restaurant ID before deletion
-    const restaurantId = existingRating.restaurantId;
 
     // Delete the rating
     await Rating.findByIdAndDelete(ratingId);
 
-    // Update restaurant average rating
-    if (restaurantId) {
-      await updateRestaurantRating(restaurantId);
-    }
-
     res.status(200).json({
+      success: true,
       message: "Rating deleted successfully"
     });
   } catch (err) {
@@ -313,7 +275,7 @@ exports.checkRatingEligibility = async (req, res) => {
     // Check if order exists and is delivered
     const order = await Order.findOne({
       _id: orderId,
-      userId: userId
+      user: userId
     });
 
     if (!order) {
@@ -431,37 +393,3 @@ exports.getChefRatings = async (req, res) => {
   }
 };
 
-// Helper function to update restaurant rating
-async function updateRestaurantRating(restaurantId) {
-  try {
-    const aggregateResult = await Rating.aggregate([
-      { 
-        $match: { 
-          restaurantId: new mongoose.Types.ObjectId(restaurantId) 
-        } 
-      },
-      { 
-        $group: {
-          _id: null,
-          averageRating: { $avg: "$rating" },
-          totalRatings: { $sum: 1 }
-        }
-      }
-    ]);
-
-    if (aggregateResult.length > 0) {
-      await Restaurant.findByIdAndUpdate(restaurantId, {
-        rating: parseFloat(aggregateResult[0].averageRating.toFixed(1)),
-        totalRatings: aggregateResult[0].totalRatings
-      });
-    } else {
-      await Restaurant.findByIdAndUpdate(restaurantId, {
-        rating: 0,
-        totalRatings: 0
-      });
-    }
-  } catch (err) {
-    console.error("Update restaurant rating error:", err);
-    throw err;
-  }
-}
