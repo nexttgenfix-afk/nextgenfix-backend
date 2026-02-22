@@ -1,158 +1,129 @@
-const { messaging, db } = require('../config/firebase');
+const { messaging } = require('../config/firebase');
+const Notification = require('../models/notificationModel');
 const User = require('../models/userModel');
 
 const notificationService = {
   /**
-   * Send push notification to a specific user
+   * Send push notification to a specific user and store in MongoDB
    * @param {string} userId - User's MongoDB ID
-   * @param {object} notification - Notification object with title, body, and data
-   * @returns {Promise<object>} - Result of sending notification
+   * @param {object} notification - { title, body, data, type }
+   * @returns {Promise<object>}
    */
   async sendToUser(userId, notification) {
     try {
-      // Get user's FCM token
-      const user = await User.findById(userId);
-      
-      if (!user || !user.fcmToken) {
-        console.log(`No FCM token found for user ${userId}`);
-        return { success: false, error: 'User has no FCM token registered' };
-      }
-      
-      // Create message
-      const message = {
-        notification: {
-          title: notification.title,
-          body: notification.body,
-        },
-        data: notification.data || {},
-        token: user.fcmToken
-      };
-      
-      // Send notification
-      const response = await messaging.send(message);
-      
-      // Store notification in Firebase Realtime Database for history
-      const notificationRef = db.ref(`notifications/${userId}`).push();
-      await notificationRef.set({
-        ...notification,
-        timestamp: Date.now(),
-        read: false
+      // Store notification in MongoDB
+      const saved = await Notification.create({
+        user: userId,
+        type: notification.type || 'system',
+        title: notification.title,
+        message: notification.body,
+        data: notification.data || {}
       });
-      
-      return { 
-        success: true, 
-        messageId: response,
-        dbKey: notificationRef.key
-      };
+
+      // Try sending FCM push (non-blocking — notification is already stored)
+      const user = await User.findById(userId);
+      if (user && user.fcmToken && messaging) {
+        try {
+          const message = {
+            notification: { title: notification.title, body: notification.body },
+            data: notification.data || {},
+            token: user.fcmToken
+          };
+          await messaging.send(message);
+        } catch (fcmErr) {
+          console.warn(`FCM push failed for user ${userId}:`, fcmErr.message);
+        }
+      }
+
+      return { success: true, notificationId: saved._id };
     } catch (error) {
       console.error('Error sending notification:', error);
       return { success: false, error: error.message };
     }
   },
-  
+
   /**
    * Send notification to multiple users
    * @param {Array<string>} userIds - Array of user MongoDB IDs
-   * @param {object} notification - Notification object
-   * @returns {Promise<object>} - Result of sending notification
+   * @param {object} notification - { title, body, data, type }
+   * @returns {Promise<object>}
    */
   async sendToMultipleUsers(userIds, notification) {
     try {
-      // Get FCM tokens for all users
+      // Bulk insert notifications for all users
+      const docs = userIds.map(uid => ({
+        user: uid,
+        type: notification.type || 'system',
+        title: notification.title,
+        message: notification.body,
+        data: notification.data || {}
+      }));
+      await Notification.insertMany(docs);
+
+      // Send FCM multicast
       const users = await User.find({ _id: { $in: userIds } });
-      const tokens = users
-        .filter(user => user.fcmToken)
-        .map(user => user.fcmToken);
-      
-      if (tokens.length === 0) {
-        return { success: false, error: 'No valid FCM tokens found' };
-      }
-      
-      // Create message for multiple recipients
-      const message = {
-        notification: {
-          title: notification.title,
-          body: notification.body,
-        },
-        data: notification.data || {},
-        tokens: tokens
-      };
-      
-      // Send multicast notification
-      const response = await messaging.sendMulticast(message);
-      
-      // Store notifications in database
-      const dbUpdates = {};
-      users.forEach(user => {
-        if (user.fcmToken) {
-          const notifKey = db.ref(`notifications/${user._id}`).push().key;
-          dbUpdates[`notifications/${user._id}/${notifKey}`] = {
-            ...notification,
-            timestamp: Date.now(),
-            read: false
+      const tokens = users.filter(u => u.fcmToken).map(u => u.fcmToken);
+
+      let fcmResult = { successCount: 0, failureCount: 0 };
+      if (tokens.length > 0 && messaging) {
+        try {
+          const message = {
+            notification: { title: notification.title, body: notification.body },
+            data: notification.data || {},
+            tokens
           };
+          fcmResult = await messaging.sendEachForMulticast(message);
+        } catch (fcmErr) {
+          console.warn('FCM multicast failed:', fcmErr.message);
         }
-      });
-      
-      await db.ref().update(dbUpdates);
-      
-      return { 
-        success: true, 
-        successCount: response.successCount,
-        failureCount: response.failureCount,
-        responses: response.responses
+      }
+
+      return {
+        success: true,
+        totalUsers: userIds.length,
+        successCount: fcmResult.successCount,
+        failureCount: fcmResult.failureCount
       };
     } catch (error) {
       console.error('Error sending multicast notification:', error);
       return { success: false, error: error.message };
     }
   },
-  
+
   /**
-   * Send notification to a topic
+   * Send notification to a topic via FCM
    * @param {string} topic - Topic name
-   * @param {object} notification - Notification object
-   * @returns {Promise<object>} - Result of sending notification
+   * @param {object} notification - { title, body, data }
+   * @returns {Promise<object>}
    */
   async sendToTopic(topic, notification) {
     try {
+      if (!messaging) {
+        return { success: false, error: 'FCM messaging not initialized' };
+      }
+
       const message = {
-        notification: {
-          title: notification.title,
-          body: notification.body,
-        },
+        notification: { title: notification.title, body: notification.body },
         data: notification.data || {},
-        topic: topic
+        topic
       };
-      
       const response = await messaging.send(message);
-      
-      // Store notification in topic history
-      const notificationRef = db.ref(`topic_notifications/${topic}`).push();
-      await notificationRef.set({
-        ...notification,
-        timestamp: admin.database.ServerValue.TIMESTAMP
-      });
-      
-      return { 
-        success: true, 
-        messageId: response,
-        dbKey: notificationRef.key
-      };
+
+      return { success: true, messageId: response };
     } catch (error) {
       console.error('Error sending topic notification:', error);
       return { success: false, error: error.message };
     }
   },
-  
+
   /**
-   * Subscribe users to a topic
-   * @param {Array<string>} tokens - FCM tokens to subscribe
-   * @param {string} topic - Topic name
-   * @returns {Promise<object>} - Result of subscription
+   * Subscribe tokens to a topic
    */
   async subscribeToTopic(tokens, topic) {
     try {
+      if (!messaging) {
+        return { success: false, error: 'FCM messaging not initialized' };
+      }
       const response = await messaging.subscribeToTopic(tokens, topic);
       return { success: true, results: response.results };
     } catch (error) {
@@ -160,64 +131,20 @@ const notificationService = {
       return { success: false, error: error.message };
     }
   },
-  
+
   /**
-   * Unsubscribe users from a topic
-   * @param {Array<string>} tokens - FCM tokens to unsubscribe
-   * @param {string} topic - Topic name
-   * @returns {Promise<object>} - Result of unsubscription
+   * Unsubscribe tokens from a topic
    */
   async unsubscribeFromTopic(tokens, topic) {
     try {
+      if (!messaging) {
+        return { success: false, error: 'FCM messaging not initialized' };
+      }
       const response = await messaging.unsubscribeFromTopic(tokens, topic);
       return { success: true, results: response.results };
     } catch (error) {
       console.error('Error unsubscribing from topic:', error);
       return { success: false, error: error.message };
-    }
-  },
-  
-  /**
-   * Mark a notification as read
-   * @param {string} userId - User's MongoDB ID
-   * @param {string} notificationKey - Notification key in database
-   * @returns {Promise<object>} - Result of operation
-   */
-  async markNotificationRead(userId, notificationKey) {
-    try {
-      await db.ref(`notifications/${userId}/${notificationKey}`).update({ read: true });
-      return { success: true };
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  /**
-   * Get user's notifications
-   * @param {string} userId - User's MongoDB ID
-   * @param {number} limit - Maximum number of notifications to retrieve
-   * @returns {Promise<Array>} - User notifications
-   */
-  async getUserNotifications(userId, limit = 50) {
-    try {
-      const snapshot = await db.ref(`notifications/${userId}`)
-        .orderByChild('timestamp')
-        .limitToLast(limit)
-        .once('value');
-      
-      const notifications = [];
-      snapshot.forEach(childSnapshot => {
-        notifications.push({
-          id: childSnapshot.key,
-          ...childSnapshot.val()
-        });
-      });
-      
-      return notifications.reverse();
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      throw error;
     }
   }
 };
