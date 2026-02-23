@@ -176,21 +176,21 @@ const validateAddress = [
  */
 const validateProfileUpdate = [
   body('name')
-    .notEmpty()
+    .optional()
     .trim()
     .isLength({ min: 2, max: 50 })
     .withMessage('Name must be between 2 and 50 characters'),
   body('email')
-    .notEmpty()
+    .optional()
     .isEmail()
     .normalizeEmail()
     .withMessage('Please provide a valid email'),
   body('gender')
-    .notEmpty()
+    .optional()
     .isIn(['Male', 'Female', 'Other', 'Prefer not to say'])
     .withMessage('Invalid gender'),
   body('birthDate')
-    .notEmpty()
+    .optional()
     .isISO8601()
     .toDate()
     .withMessage('Birth date must be a valid date'),

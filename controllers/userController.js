@@ -535,15 +535,20 @@ exports.verifyFirebaseToken = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   const userId = req.user && req.user.id ? req.user.id : (req.userId || null);
-  const { name, email, gender, birthDate } = req.body;
-
-  // Required fields as per UI: name, email, gender, birthDate
-  if (!name || !email || !gender || !birthDate) {
-    return res.status(400).json({ message: 'name, email, gender and birthDate are required' });
-  }
+  const { name, email, gender, birthDate, address } = req.body;
 
   try {
-    const update = { name, email, gender, birthDate };
+    // Only include fields that were actually sent — keeps existing data intact
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (email !== undefined) update.email = email;
+    if (gender !== undefined) update.gender = gender;
+    if (birthDate !== undefined) update.birthDate = birthDate;
+    if (address !== undefined) update.address = address;
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
