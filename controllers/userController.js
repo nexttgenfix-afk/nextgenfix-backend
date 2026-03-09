@@ -535,16 +535,19 @@ exports.verifyFirebaseToken = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   const userId = req.user && req.user.id ? req.user.id : (req.userId || null);
-  const { name, email, gender, birthDate, address } = req.body;
+  const { name, email, phone, gender, birthDate, address, calorieGoal, allergens } = req.body;
 
   try {
     // Only include fields that were actually sent — keeps existing data intact
     const update = {};
     if (name !== undefined) update.name = name;
     if (email !== undefined) update.email = email;
+    if (phone !== undefined) update.phone = phone;
     if (gender !== undefined) update.gender = gender;
     if (birthDate !== undefined) update.birthDate = birthDate;
     if (address !== undefined) update.address = address;
+    if (calorieGoal !== undefined) update.calorieGoal = calorieGoal;
+    if (allergens !== undefined) update.allergens = allergens;
 
     if (Object.keys(update).length === 0) {
       return res.status(400).json({ message: 'No fields to update' });
@@ -1157,6 +1160,121 @@ exports.addBonusNanoPoints = async (req, res) => {
   }
 };
 
+exports.completeOnboarding = async (req, res) => {
+  const userId = req.user && req.user.id ? req.user.id : (req.userId || null);
+  const { name, phone, calorieGoal, referralCode, allergens } = req.body;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (name !== undefined) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+    if (calorieGoal !== undefined) user.calorieGoal = calorieGoal;
+    if (allergens !== undefined) user.allergens = allergens;
+
+    // Handle referral code if provided and not already applied
+    let referralResult = null;
+    if (referralCode) {
+      if (user.referredBy) {
+        return res.status(400).json({ message: 'Referral code already applied' });
+      }
+
+      const referrer = await User.findOne({ referralCode });
+      if (!referrer) {
+        return res.status(400).json({ message: 'Invalid referral code' });
+      }
+      if (referrer._id.toString() === userId) {
+        return res.status(400).json({ message: 'Cannot use your own referral code' });
+      }
+
+      const settings = await Settings.getSettings();
+      const cfg = settings.referralConfig || {};
+      const maxReferrals = cfg.maxReferrals || 5;
+      if ((referrer.referralCount || 0) >= maxReferrals) {
+        return res.status(400).json({ message: 'Referrer has reached the maximum allowed referrals' });
+      }
+
+      const Coupon = require('../models/couponModel');
+      const shortid = require('shortid');
+      const genCode = (prefix = 'R') => (prefix + shortid.generate()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+      const now = new Date();
+      const validityDays = cfg.validityDays || 30;
+      const validUntil = new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000);
+      const refereeReward = cfg.refereeReward || 0;
+      const referrerReward = cfg.referrerReward || 0;
+
+      let refereeCoupon = null;
+      if (refereeReward > 0) {
+        refereeCoupon = new Coupon({
+          code: genCode('RF'),
+          discountValue: refereeReward,
+          discountType: 'fixed',
+          minOrderValue: cfg.minOrderAmount || 0,
+          validFrom: now,
+          validUntil,
+          isActive: true,
+          createdBy: userId,
+          createdByType: 'Admin',
+          meta: { origin: 'referral', originType: 'referee' }
+        });
+        await refereeCoupon.save();
+        user.referralCoupons = user.referralCoupons || [];
+        user.referralCoupons.push(refereeCoupon._id);
+      }
+
+      let referrerCoupon = null;
+      if (referrerReward > 0) {
+        referrerCoupon = new Coupon({
+          code: genCode('RR'),
+          discountValue: referrerReward,
+          discountType: 'fixed',
+          minOrderValue: cfg.minOrderAmount || 0,
+          validFrom: now,
+          validUntil,
+          isActive: true,
+          createdBy: userId,
+          createdByType: 'Admin',
+          meta: { origin: 'referral', originType: 'referrer' }
+        });
+        await referrerCoupon.save();
+        referrer.referralCoupons = referrer.referralCoupons || [];
+        referrer.referralCoupons.push(referrerCoupon._id);
+      }
+
+      user.referredBy = referrer._id;
+      referrer.referralCount = (referrer.referralCount || 0) + 1;
+      referrer.referrals = referrer.referrals || [];
+      referrer.referrals.push({ user: user._id, dateReferred: new Date(), rewardClaimed: false });
+      await referrer.save();
+
+      await createNotification({
+        userId: referrer._id,
+        title: 'New Referral',
+        message: `${user.name || user.phone || 'A user'} joined using your referral code!`,
+        type: 'referral'
+      });
+
+      referralResult = {
+        refereeCoupon: refereeCoupon ? { id: refereeCoupon._id, code: refereeCoupon.code } : null,
+        referrerCoupon: referrerCoupon ? { id: referrerCoupon._id, code: referrerCoupon.code } : null
+      };
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Onboarding completed successfully',
+      user,
+      ...(referralResult && { referral: referralResult })
+    });
+  } catch (err) {
+    console.error('Onboarding error:', err);
+    res.status(500).json({ message: 'Failed to complete onboarding' });
+  }
+};
+
 // Consolidate and export all controller functions from one place.
 // Merge any properties assigned to `exports` with local named functions.
 module.exports = Object.assign({}, exports, {
@@ -1191,5 +1309,6 @@ module.exports = Object.assign({}, exports, {
   editProfile: exports.editProfile,
   getNotificationPreferences: exports.getNotificationPreferences,
   getNanoPoints: exports.getNanoPoints,
-  addBonusNanoPoints: exports.addBonusNanoPoints
+  addBonusNanoPoints: exports.addBonusNanoPoints,
+  completeOnboarding: exports.completeOnboarding
 });
