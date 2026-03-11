@@ -131,6 +131,10 @@ const menuItemSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    sugar: {
+      type: Number,
+      default: 0
+    },
     servingSize: {
       type: String,
       default: "1 serving"

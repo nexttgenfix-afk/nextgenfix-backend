@@ -214,6 +214,13 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  macroGoals: {
+    protein: { type: Number, default: 120 },
+    carbs: { type: Number, default: 280 },
+    fat: { type: Number, default: 233 },
+    fiber: { type: Number, default: 38 },
+    sugar: { type: Number, default: 50 }
+  },
   totalOrders: {
     type: Number,
     default: 0

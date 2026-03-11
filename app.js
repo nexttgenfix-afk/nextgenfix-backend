@@ -34,6 +34,7 @@ const couponRoutes = require('./routes/couponRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
+const nutritionRoutes = require('./routes/nutritionRoutes');
 const dotenv = require('dotenv');
 
 require('dotenv').config();
@@ -104,6 +105,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/tables', tableRoutes);
 app.use('/api/spin-wheel', spinWheelRoutes);
+app.use('/api/nutrition', nutritionRoutes);
 
 // Admin routes (require admin authentication)
 app.use('/api/admin/auth', adminAuthRoutes);
