@@ -34,6 +34,7 @@ const couponRoutes = require('./routes/couponRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const faqRoutes = require('./routes/faqRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
+const menuItemRoutes = require('./routes/menuItemRoutes');
 const nutritionRoutes = require('./routes/nutritionRoutes');
 const dotenv = require('dotenv');
 
@@ -87,6 +88,7 @@ app.use('/api/home', homeRoutes);
 app.use('/api/banners', bannerRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/menu-items', menuItemRoutes);
 app.use('/api/combos', comboRoutes);
 app.use('/api/coupons', couponRoutes);
 
