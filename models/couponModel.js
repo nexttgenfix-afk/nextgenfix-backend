@@ -7,6 +7,15 @@ const couponSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  title: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  termsAndConditions: {
+    type: [String],
+    default: []
+  },
   discountValue: {
     type: Number,
     required: true

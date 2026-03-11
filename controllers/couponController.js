@@ -2,7 +2,7 @@ const Coupon = require('../models/couponModel');
 
 exports.createCoupon = async (req, res) => {
   try {
-    const { code, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, validFrom, validUntil, isActive, applicableTiers } = req.body;
+    const { code, title, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, validFrom, validUntil, isActive, applicableTiers, termsAndConditions } = req.body;
 
     // Add default dates if not provided
     const defaultValidFrom = validFrom || new Date();
@@ -10,6 +10,7 @@ exports.createCoupon = async (req, res) => {
 
     const newCoupon = new Coupon({
       code,
+      title,
       discountValue,
       discountType,
       minOrderValue,
@@ -17,6 +18,7 @@ exports.createCoupon = async (req, res) => {
       usageLimit,
       usageLimitPerUser,
       applicableTiers,
+      termsAndConditions: termsAndConditions || [],
       validFrom: defaultValidFrom,
       validUntil: defaultValidUntil,
       isActive,
@@ -37,8 +39,32 @@ exports.createCoupon = async (req, res) => {
 
 exports.getUserCoupons = async (req, res) => {
   try {
-    const coupons = await Coupon.find({ createdBy: req.user.id, createdByType: req.user.role }).sort({ validUntil: -1 });
-    res.status(200).json(coupons);
+    const now = new Date();
+    const coupons = await Coupon.find({
+      isActive: true,
+      isLocked: false,
+      refunded: false,
+      validFrom: { $lte: now },
+      validUntil: { $gt: now },
+      'meta.origin': null  // exclude referral/spin coupons
+    })
+      .select('code title discountType discountValue minOrderValue maxDiscount termsAndConditions validUntil applicableTiers')
+      .sort({ validUntil: 1 });
+
+    const data = coupons.map(c => ({
+      _id: c._id,
+      code: c.code,
+      title: c.title || '',
+      discountType: c.discountType,
+      discountValue: c.discountValue,
+      minOrderValue: c.minOrderValue,
+      maxDiscount: c.maxDiscount,
+      termsAndConditions: c.termsAndConditions || [],
+      validUntil: c.validUntil,
+      applicableTiers: c.applicableTiers
+    }));
+
+    res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching coupons:', err);
     res.status(500).json({ message: 'Failed to fetch coupons', error: err.message });
@@ -48,11 +74,11 @@ exports.getUserCoupons = async (req, res) => {
 exports.updateCoupon = async (req, res) => {
   try {
     const { id } = req.params;
-    const { code, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, validFrom, validUntil, isActive, applicableTiers } = req.body;
+    const { code, title, discountType, discountValue, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, validFrom, validUntil, isActive, applicableTiers, termsAndConditions } = req.body;
 
     const updatedCoupon = await Coupon.findByIdAndUpdate(
       id,
-      { code, discountValue, discountType, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, applicableTiers, validFrom, validUntil, isActive },
+      { code, title, discountValue, discountType, minOrderValue, maxDiscount, usageLimit, usageLimitPerUser, applicableTiers, termsAndConditions, validFrom, validUntil, isActive },
       { new: true, runValidators: true }
     );
 
