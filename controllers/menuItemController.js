@@ -1,4 +1,4 @@
-const { MenuItem } = require('../models/menuItemModel');
+const MenuItem = require('../models/menuItemModel');
 const Order = require('../models/orderModel');
 const Rating = require('../models/ratingModel');
 const Category = require('../models/categoryModel'); // Add this import
