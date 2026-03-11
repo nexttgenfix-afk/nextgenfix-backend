@@ -701,6 +701,18 @@ exports.previewDescription = async (req, res) => {
   }
 };
 
+// Get available moods (User-facing)
+exports.getMoods = (req, res) => {
+  const moods = [
+    { value: 'locked_in',    label: 'Locked In',     image: '' },
+    { value: 'bougie',       label: 'Bougie',        image: '' },
+    { value: 'homesick',     label: 'Homesick',      image: '' },
+    { value: 'burnt_tf_out', label: 'Burnt TF Out',  image: '' },
+    { value: 'need_a_hug',   label: 'Need a Hug',    image: '' }
+  ];
+  res.json({ success: true, data: moods });
+};
+
 // Search and filter menu items by mood and hunger level tags (User-facing)
 exports.searchMenuItems = async (req, res) => {
   try {

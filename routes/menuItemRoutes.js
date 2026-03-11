@@ -5,6 +5,7 @@ const { protect, authorizeVendor } = require('../middlewares/authMiddleware');
 const { uploadMenuItemPhoto } = require('../config/cloudinary'); // CORRECT PATH
 
 // Public routes - Search and filtering
+router.get('/moods', menuItemController.getMoods);
 router.get('/search', menuItemController.searchMenuItems);
 router.get('/mood/:mood', menuItemController.getMenuItemsByMood);
 router.get('/hunger-level/:level', menuItemController.getMenuItemsByHungerLevel);
