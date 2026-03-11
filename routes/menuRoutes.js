@@ -10,6 +10,7 @@ router.get('/', optionalAuth, menuController.getAllMenuItems);
 router.get('/categories', menuController.getCategories);
 router.get('/recommendations', optionalAuth, menuController.getRecommendations);
 router.get('/trending', menuController.getTrendingItems);
+router.get('/seasonal', menuController.getSeasonalItems);
 router.get('/search', searchLimiter, menuController.searchMenuItems);
 router.get('/:id', menuController.getMenuItemById);
 

@@ -11,7 +11,7 @@ const getCart = async (req, res) => {
     const userId = req.userId;
 
     let cart = await Cart.findOne({ user: userId })
-      .populate('items.menuItem', 'name price image category')
+      .populate('items.menuItem', 'name price image category nutritionInfo.calories')
       .populate('user', 'name email phone');
 
     if (!cart) {
@@ -22,7 +22,7 @@ const getCart = async (req, res) => {
         totalAmount: 0
       });
       await cart.save();
-      await cart.populate('items.menuItem', 'name price image category');
+      await cart.populate('items.menuItem', 'name price image category nutritionInfo.calories');
       await cart.populate('user', 'name email phone');
     }
 
@@ -104,7 +104,7 @@ const addToCart = async (req, res) => {
     await cart.calculateTotal();
 
     await cart.save();
-    await cart.populate('items.menuItem', 'name price image category');
+    await cart.populate('items.menuItem', 'name price image category nutritionInfo.calories');
 
     res.status(200).json({
       success: true,
@@ -156,7 +156,7 @@ const updateCartItem = async (req, res) => {
 
     await cart.calculateTotal();
     await cart.save();
-    await cart.populate('items.menuItem', 'name price image category');
+    await cart.populate('items.menuItem', 'name price image category nutritionInfo.calories');
 
     res.status(200).json({
       success: true,

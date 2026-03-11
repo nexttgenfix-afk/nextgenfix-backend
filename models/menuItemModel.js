@@ -154,6 +154,18 @@ const menuItemSchema = new mongoose.Schema({
       type: String
     }
   },
+  seasonal: {
+    isSeasonSpecial: {
+      type: Boolean,
+      default: false
+    },
+    seasonalFrom: {
+      type: Date
+    },
+    seasonalUntil: {
+      type: Date
+    }
+  },
   popularity: {
     orderCount: {
       type: Number,
@@ -182,6 +194,11 @@ const menuItemSchema = new mongoose.Schema({
   hungerLevelTag: {
     type: String,
     enum: ['little_hungry', 'quite_hungry', 'very_hungry', 'super_hungry'],
+    default: null
+  },
+  badge: {
+    type: String,
+    enum: ['Recommended', 'Our Choice', 'Healthiest', 'Bestseller', 'New', null],
     default: null
   },
   isAvailable: {

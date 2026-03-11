@@ -713,6 +713,8 @@ exports.searchMenuItems = async (req, res) => {
       minPrice,
       maxPrice,
       isAvailable,
+      badge,
+      seasonal,
       sort = 'popularity',
       page = 1,
       limit = 20
@@ -758,6 +760,22 @@ exports.searchMenuItems = async (req, res) => {
     } else {
       // By default, only show available items
       filter.isAvailable = true;
+    }
+
+    if (badge) {
+      filter.badge = badge;
+    }
+
+    if (seasonal === 'true') {
+      const now = new Date();
+      filter['seasonal.isSeasonSpecial'] = true;
+      if (!filter.$and) filter.$and = [];
+      filter.$and.push({
+        $or: [
+          { 'seasonal.seasonalFrom': { $exists: false }, 'seasonal.seasonalUntil': { $exists: false } },
+          { 'seasonal.seasonalFrom': { $lte: now }, 'seasonal.seasonalUntil': { $gte: now } }
+        ]
+      });
     }
 
     // Add active special offer check

@@ -16,7 +16,8 @@ const getAllMenuItems = async (req, res) => {
       minPrice,
       maxPrice,
       isVeg,
-      isAvailable = true
+      isAvailable = true,
+      seasonal
     } = req.query;
 
     const now = new Date();
@@ -50,6 +51,15 @@ const getAllMenuItems = async (req, res) => {
       if (maxPrice) query.price.$lte = parseFloat(maxPrice);
     }
     if (isVeg !== undefined) query.isVeg = isVeg === 'true';
+    if (seasonal === 'true') {
+      query['seasonal.isSeasonSpecial'] = true;
+      query.$and.push({
+        $or: [
+          { 'seasonal.seasonalFrom': { $exists: false }, 'seasonal.seasonalUntil': { $exists: false } },
+          { 'seasonal.seasonalFrom': { $lte: now }, 'seasonal.seasonalUntil': { $gte: now } }
+        ]
+      });
+    }
 
     // Sorting
     const sortOptions = {};
@@ -172,14 +182,90 @@ const searchMenuItems = async (req, res) => {
 // Get menu item by ID
 const getMenuItemById = async (req, res) => {
   try {
-    let itemQuery = MenuItem.findById(req.params.id).populate('category', 'name').populate('reviews.userId', 'name');
-    const menuItem = await itemQuery;
+    const menuItem = await MenuItem.findById(req.params.id)
+      .populate('category', 'name')
+      .lean();
 
     if (!menuItem) {
       return res.status(404).json({ message: 'Menu item not found' });
     }
 
-    res.json(menuItem);
+    const response = {
+      _id: menuItem._id,
+      name: menuItem.name,
+      description: menuItem.description?.text || '',
+      price: menuItem.price,
+      discountedPrice: menuItem.discountedPrice || null,
+      image: menuItem.image,
+      isVeg: menuItem.isVeg,
+      category: menuItem.category,
+      badge: menuItem.badge || null,
+      status: menuItem.status,
+      isAvailable: menuItem.isAvailable,
+      preparationTime: menuItem.preparationTime,
+      cuisine: menuItem.cuisine,
+      oilType: menuItem.oilType,
+      tags: menuItem.tags || [],
+      keyIngredients: menuItem.keyIngredients || [],
+      allergens: menuItem.allergens || [],
+      // Flat nutrition fields for easy rendering
+      calories: menuItem.nutritionInfo?.calories || 0,
+      protein: menuItem.nutritionInfo?.protein || 0,
+      carbs: menuItem.nutritionInfo?.carbs || 0,
+      fat: menuItem.nutritionInfo?.fat || 0,
+      fiber: menuItem.nutritionInfo?.fiber || 0,
+      servingSize: menuItem.nutritionInfo?.servingSize || '1 serving',
+      // Customization
+      customizationOptions: menuItem.customizationOptions || {},
+      // Ratings
+      rating: menuItem.rating || { average: 0, count: 0 },
+      // Seasonal & special offer
+      isSeasonSpecial: menuItem.seasonal?.isSeasonSpecial || false,
+      specialOffer: menuItem.specialOffer || null,
+      // Photos & videos
+      photos: menuItem.photos || {},
+      videos: menuItem.videos || {}
+    };
+
+    res.json({ success: true, data: response });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Get season special items
+const getSeasonalItems = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const now = new Date();
+
+    const query = {
+      isAvailable: true,
+      'seasonal.isSeasonSpecial': true,
+      $or: [
+        { 'seasonal.seasonalFrom': { $exists: false }, 'seasonal.seasonalUntil': { $exists: false } },
+        { 'seasonal.seasonalFrom': { $lte: now }, 'seasonal.seasonalUntil': { $gte: now } }
+      ]
+    };
+
+    const [menuItems, total] = await Promise.all([
+      MenuItem.find(query)
+        .populate('category', 'name')
+        .sort({ 'popularity.orderCount': -1 })
+        .limit(parseInt(limit))
+        .skip((parseInt(page) - 1) * parseInt(limit)),
+      MenuItem.countDocuments(query)
+    ]);
+
+    res.json({
+      menuItems,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit))
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -493,6 +579,7 @@ module.exports = {
   getTrendingItems,
   searchMenuItems,
   getMenuItemById,
+  getSeasonalItems,
   createMenuItem,
   updateMenuItem,
   deleteMenuItem,
