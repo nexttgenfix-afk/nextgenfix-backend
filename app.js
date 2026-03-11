@@ -33,6 +33,7 @@ const comboRoutes = require('./routes/comboRoutes');
 const couponRoutes = require('./routes/couponRoutes');
 const walletRoutes = require('./routes/walletRoutes');
 const faqRoutes = require('./routes/faqRoutes');
+const bannerRoutes = require('./routes/bannerRoutes');
 const dotenv = require('dotenv');
 
 require('dotenv').config();
@@ -82,6 +83,7 @@ app.use('/api/health', healthRoutes);
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
 app.use('/api/home', homeRoutes);
+app.use('/api/banners', bannerRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/combos', comboRoutes);
