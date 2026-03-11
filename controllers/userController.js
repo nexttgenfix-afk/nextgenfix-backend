@@ -606,6 +606,7 @@ exports.addLocation = async (req, res) => {
     label,
     saveAs,
     flatNumber,
+    area,
     landmark,
     deliveryInstructions,
     coordinates,
@@ -613,9 +614,9 @@ exports.addLocation = async (req, res) => {
   } = req.body;
 
   // Validate required fields
-  if (!flatNumber || !coordinates) {
-    return res.status(400).json({ 
-      message: "Required fields missing: flatNumber and coordinates are required" 
+  if (!flatNumber || !area || !coordinates) {
+    return res.status(400).json({
+      message: "Required fields missing: flatNumber, area, and coordinates are required"
     });
   }
 
@@ -643,9 +644,10 @@ exports.addLocation = async (req, res) => {
     }
 
     // Create the location object
-    const locationData = { 
-      user: userId, 
+    const locationData = {
+      user: userId,
       flatNumber,
+      area,
       coordinates: {
         type: "Point",
         coordinates: coordinates
@@ -1160,7 +1162,7 @@ exports.addBonusNanoPoints = async (req, res) => {
   }
 };
 
-exports.completeOnboarding = async (req, res) => {
+exports.completePersonalDetails = async (req, res) => {
   const userId = req.user && req.user.id ? req.user.id : (req.userId || null);
   const { name, phone, calorieGoal, referralCode, allergens } = req.body;
 
@@ -1270,8 +1272,8 @@ exports.completeOnboarding = async (req, res) => {
       ...(referralResult && { referral: referralResult })
     });
   } catch (err) {
-    console.error('Onboarding error:', err);
-    res.status(500).json({ message: 'Failed to complete onboarding' });
+    console.error('Personal details error:', err);
+    res.status(500).json({ message: 'Failed to save personal details' });
   }
 };
 
@@ -1310,5 +1312,5 @@ module.exports = Object.assign({}, exports, {
   getNotificationPreferences: exports.getNotificationPreferences,
   getNanoPoints: exports.getNanoPoints,
   addBonusNanoPoints: exports.addBonusNanoPoints,
-  completeOnboarding: exports.completeOnboarding
+  completePersonalDetails: exports.completePersonalDetails
 });

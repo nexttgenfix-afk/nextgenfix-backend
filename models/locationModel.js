@@ -49,7 +49,7 @@ const locationSchema = new mongoose.Schema({
   },
   saveAs: {
     type: String,
-    enum: ['Home', 'Work', 'Others'],
+    enum: ['Home', 'Work', 'Gym', 'College', 'Friends', 'Stays', 'Others'],
     default: 'Others',
     description: "Location category"
   },
@@ -57,6 +57,11 @@ const locationSchema = new mongoose.Schema({
     type: String,
     required: true,
     description: "Flat/House No/Floor/Building"
+  },
+  area: {
+    type: String,
+    required: true,
+    description: "Apartment/Road/Area name"
   },
   landmark: {
     type: String,

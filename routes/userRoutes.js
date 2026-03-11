@@ -24,8 +24,8 @@ router.delete('/addresses/:addressId', requireGuestOrUser, userController.delete
 router.post('/questions', requireGuestOrUser, userController.saveQuestion);
 router.get('/questions', requireGuestOrUser, userController.getQuestions);
 
-// Onboarding (personal details screen)
-router.post('/onboarding', requireAuth, userController.completeOnboarding);
+// Personal details (onboarding screen)
+router.post('/personal-details', requireAuth, userController.completePersonalDetails);
 
 // Auth-only routes (profile, tier, referrals)
 router.get('/me', requireAuth, userController.getProfile);
