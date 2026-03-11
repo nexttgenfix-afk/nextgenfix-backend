@@ -137,16 +137,22 @@ const validateOrder = [
     .isArray({ min: 1 })
     .withMessage('Items must be a non-empty array if provided'),
   body('orderType')
-    .isIn(['on_site_dining', 'delivery'])
-    .withMessage('Order type must be on_site_dining or delivery'),
+    .isIn(['delivery', 'take_away', 'car'])
+    .withMessage('Order type must be delivery, take_away, or car'),
   body('deliveryAddress')
     .if(body('orderType').equals('delivery'))
     .notEmpty()
     .withMessage('Delivery address is required for delivery orders'),
-  body('tableNumber')
-    .if(body('orderType').equals('on_site_dining'))
+  body('scheduleType')
+    .optional()
+    .isIn(['now', 'scheduled'])
+    .withMessage('scheduleType must be now or scheduled'),
+  body('scheduledTime')
+    .if(body('scheduleType').equals('scheduled'))
     .notEmpty()
-    .withMessage('Table number is required for dine-in orders'),
+    .withMessage('scheduledTime is required when scheduleType is scheduled')
+    .isISO8601()
+    .withMessage('scheduledTime must be a valid date'),
   handleValidationErrors
 ];
 

@@ -2,11 +2,60 @@ const Order = require('../models/orderModel');
 const Cart = require('../models/cartModel');
 const User = require('../models/userModel');
 const MenuItem = require('../models/menuItemModel');
+const NutritionLog = require('../models/nutritionLogModel');
 const mongoose = require('mongoose');
 const { initiatePayment, verifyPayment } = require('../services/payment');
 const { createNotification } = require('../services/notification');
 const { updateUserTier } = require('../services/tier');
 const walletService = require('../services/walletService');
+
+// Update the daily nutrition log when an order is placed
+const updateNutritionLog = async (userId, orderId, orderItems) => {
+  try {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const user = await User.findById(userId).select('calorieGoal').lean();
+    const calorieGoal = user?.calorieGoal || 2000;
+
+    // Sum up nutrition from all ordered items
+    const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 };
+    for (const item of orderItems) {
+      const menuItem = await MenuItem.findById(item.itemId).select('nutritionInfo').lean();
+      if (menuItem?.nutritionInfo) {
+        const qty = item.quantity;
+        totals.calories += (menuItem.nutritionInfo.calories || 0) * qty;
+        totals.protein  += (menuItem.nutritionInfo.protein  || 0) * qty;
+        totals.carbs    += (menuItem.nutritionInfo.carbs    || 0) * qty;
+        totals.fat      += (menuItem.nutritionInfo.fat      || 0) * qty;
+        totals.fiber    += (menuItem.nutritionInfo.fiber    || 0) * qty;
+        totals.sugar    += (menuItem.nutritionInfo.sugar    || 0) * qty;
+      }
+    }
+
+    // Upsert — increment today's log
+    const log = await NutritionLog.findOneAndUpdate(
+      { user: userId, date: dateStr },
+      {
+        $inc: {
+          'consumed.calories': totals.calories,
+          'consumed.protein':  totals.protein,
+          'consumed.carbs':    totals.carbs,
+          'consumed.fat':      totals.fat,
+          'consumed.fiber':    totals.fiber,
+          'consumed.sugar':    totals.sugar
+        },
+        $addToSet: { orders: orderId }
+      },
+      { upsert: true, new: true }
+    );
+
+    // Update withinGoal flag
+    log.withinGoal = log.consumed.calories <= calorieGoal;
+    await log.save();
+  } catch (err) {
+    console.error('Nutrition log update error:', err);
+    // Non-blocking — do not throw
+  }
+};
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -14,11 +63,12 @@ const createOrder = async (req, res) => {
     const {
       items,
       orderType,
+      scheduleType = 'now',
+      scheduledTime,
       deliveryAddress,
-      tableNumber,
+      deliveryInstructions,
       paymentMethod,
-      specialInstructions,
-      scheduledTime
+      specialInstructions
     } = req.body;
     // couponCode may be auto-applied for first-time referees, so make it mutable
     let couponCode = req.body.couponCode;
@@ -169,6 +219,8 @@ const createOrder = async (req, res) => {
     const order = await Order.create({
       user: req.user.id,
       orderType,
+      scheduleType,
+      scheduledTime: scheduleType === 'scheduled' && scheduledTime ? new Date(scheduledTime) : undefined,
       items: orderItems,
       billing: {
         subtotal: totalAmount,
@@ -184,12 +236,11 @@ const createOrder = async (req, res) => {
         paidViaWallet
       },
       deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
-      tableNumber: orderType === 'on_site_dining' ? tableNumber : undefined,
+      deliveryInstructions: orderType === 'delivery' ? (deliveryInstructions || '') : undefined,
       paymentDetails: {
         method: paymentMethod
       },
-      cookingInstructions: specialInstructions,
-      scheduledTime: scheduledTime ? new Date(scheduledTime) : undefined
+      cookingInstructions: specialInstructions
     });
 
     // Update menu item order counts
@@ -198,6 +249,9 @@ const createOrder = async (req, res) => {
         $inc: { orderCount: item.quantity }
       });
     }
+
+    // Update daily nutrition log (non-blocking)
+    updateNutritionLog(req.user.id, order._id, orderItems);
 
     // Create notification
     await createNotification({

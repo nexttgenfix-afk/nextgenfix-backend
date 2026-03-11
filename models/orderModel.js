@@ -23,6 +23,11 @@ const orderSchema = new mongoose.Schema({
       return 'dinner';
     }
   },
+  scheduleType: {
+    type: String,
+    enum: ['now', 'scheduled'],
+    default: 'now'
+  },
   scheduledTime: {
     type: Date
   },
