@@ -90,7 +90,6 @@ exports.getSummary = async (req, res) => {
       data: {
         streak,
         date: dateStr,
-        calorieGoal,
         // Today's totals
         consumed: {
           calories: todayLog.consumed.calories,
@@ -100,8 +99,8 @@ exports.getSummary = async (req, res) => {
           fiber:    todayLog.consumed.fiber,
           sugar:    todayLog.consumed.sugar
         },
-        // Goals for macros
-        goals: macroGoals,
+        // All goals in one place
+        goals: { calories: calorieGoal, ...macroGoals },
         // Weekly stat
         withinGoalThisWeek,
         withinGoalMessage: `Stayed within limit ${withinGoalThisWeek} times this week`,
@@ -119,13 +118,11 @@ exports.getSummary = async (req, res) => {
 exports.getGoals = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('calorieGoal macroGoals').lean();
+    const macroGoals = user.macroGoals || { protein: 120, carbs: 280, fat: 233, fiber: 38, sugar: 50 };
     res.json({
       success: true,
       data: {
-        calorieGoal: user.calorieGoal || 2000,
-        macroGoals: user.macroGoals || {
-          protein: 120, carbs: 280, fat: 233, fiber: 38, sugar: 50
-        }
+        goals: { calories: user.calorieGoal || 2000, ...macroGoals }
       }
     });
   } catch (err) {
@@ -133,18 +130,33 @@ exports.getGoals = async (req, res) => {
   }
 };
 
-// PUT /api/nutrition/goals — update calorie + macro goals
+// PUT /api/nutrition/goals — update goals via a single `goals` object
 exports.updateGoals = async (req, res) => {
   try {
-    const { calorieGoal, macroGoals } = req.body;
+    const { goals } = req.body;
+    if (!goals) return res.status(400).json({ message: 'goals object is required' });
+
     const update = {};
-    if (calorieGoal !== undefined) update.calorieGoal = calorieGoal;
-    if (macroGoals) update.macroGoals = macroGoals;
+    if (goals.calories !== undefined) update.calorieGoal = goals.calories;
+    const { calories, ...macros } = goals;
+    if (Object.keys(macros).length > 0) {
+      Object.entries(macros).forEach(([key, val]) => {
+        update[`macroGoals.${key}`] = val;
+      });
+    }
 
-    const user = await User.findByIdAndUpdate(req.user.id, update, { new: true })
-      .select('calorieGoal macroGoals');
+    await User.findByIdAndUpdate(req.user.id, update, { new: true });
 
-    res.json({ success: true, message: 'Goals updated', data: user });
+    const updated = await User.findById(req.user.id).select('calorieGoal macroGoals').lean();
+    const macroGoals = updated.macroGoals || { protein: 120, carbs: 280, fat: 233, fiber: 38, sugar: 50 };
+
+    res.json({
+      success: true,
+      message: 'Goals updated',
+      data: {
+        goals: { calories: updated.calorieGoal || 2000, ...macroGoals }
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to update goals' });
   }
