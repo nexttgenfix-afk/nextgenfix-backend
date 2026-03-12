@@ -80,6 +80,29 @@ if (hasCloudinaryEnv) {
     }
   });
 
+  // Configure storage for banner images
+  const bannerImageStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'nextgenfix/banners',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      transformation: [
+        { width: 1200, height: 480, crop: 'limit' },
+        { quality: 'auto' }
+      ]
+    }
+  });
+
+  // Configure storage for banner videos
+  const bannerVideoStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: 'nextgenfix/banners/videos',
+      resource_type: 'video',
+      allowed_formats: ['mp4', 'mov', 'webm']
+    }
+  });
+
   // General Cloudinary storage for combo photos
   const cloudinaryStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
@@ -134,6 +157,28 @@ if (hasCloudinaryEnv) {
           cb(new Error('Only JPEG, JPG and PNG file formats are allowed'));
         }
       }
+    }),
+    uploadBannerImage: multer({
+      storage: bannerImageStorage,
+      limits: { fileSize: 5000000 },
+      fileFilter: (req, file, cb) => {
+        if (['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only JPEG, PNG and WebP formats are allowed for banner images'));
+        }
+      }
+    }),
+    uploadBannerVideo: multer({
+      storage: bannerVideoStorage,
+      limits: { fileSize: 50000000 }, // 50MB for videos
+      fileFilter: (req, file, cb) => {
+        if (['video/mp4', 'video/quicktime', 'video/webm'].includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Only MP4, MOV and WebM formats are allowed for banner videos'));
+        }
+      }
     })
   };
 
@@ -155,7 +200,9 @@ if (hasCloudinaryEnv) {
     uploadChefProfilePicture: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } }),
     uploadChefCoverPhoto: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } }),
     uploadMealBoxPhoto: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } }),
-    uploadComboPhoto: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } })
+    uploadComboPhoto: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } }),
+    uploadBannerImage: multer({ storage: memoryStorage, limits: { fileSize: 5000000 } }),
+    uploadBannerVideo: multer({ storage: memoryStorage, limits: { fileSize: 50000000 } })
   };
 
 }

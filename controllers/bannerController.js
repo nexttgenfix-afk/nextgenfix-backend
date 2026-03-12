@@ -72,6 +72,19 @@ exports.updateBanner = async (req, res) => {
   }
 };
 
+// POST /api/banners/admin/upload — upload image or video, returns the Cloudinary URL
+exports.uploadBannerMedia = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const url = req.file.path || req.file.secure_url || req.file.location;
+    if (!url) return res.status(500).json({ message: 'Upload succeeded but URL missing' });
+    res.json({ success: true, url });
+  } catch (err) {
+    console.error('Upload banner media error:', err);
+    res.status(500).json({ message: 'Failed to upload media' });
+  }
+};
+
 // DELETE /api/banners/admin/:id
 exports.deleteBanner = async (req, res) => {
   try {
