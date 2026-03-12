@@ -125,7 +125,8 @@ const addToCart = async (req, res) => {
 const updateCartItem = async (req, res) => {
   try {
     const userId = req.userId;
-    const { itemId, quantity, customizations } = req.body;
+    const { itemId: bodyItemId, quantity, customizations, specialInstructions } = req.body;
+    const itemId = req.params.itemId || bodyItemId;
 
     const cart = await Cart.findOne({ user: userId });
     if (!cart) {
@@ -149,8 +150,11 @@ const updateCartItem = async (req, res) => {
     } else {
       // Update item
       cart.items[itemIndex].quantity = quantity;
-      if (customizations) {
+      if (customizations !== undefined) {
         cart.items[itemIndex].customizations = customizations;
+      }
+      if (specialInstructions !== undefined) {
+        cart.items[itemIndex].specialInstructions = specialInstructions;
       }
     }
 

@@ -18,6 +18,10 @@ const cartItemSchema = new mongoose.Schema({
   customizations: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
+  },
+  specialInstructions: {
+    type: String,
+    default: ''
   }
 }, { _id: true });
 
