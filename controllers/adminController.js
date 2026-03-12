@@ -1169,7 +1169,8 @@ exports.updateMenuItem = async (req, res) => {
       hungerLevelTag,
       recommendedItems,
       nutritionInfo,
-      specialOffer
+      specialOffer,
+      seasonal
     } = req.body;
 
     // Validate mood and hunger level tags if provided
@@ -1258,9 +1259,24 @@ exports.updateMenuItem = async (req, res) => {
       }
     }
 
+    // Parse and add seasonal if provided
+    if (seasonal !== undefined) {
+      if (typeof seasonal === 'string') {
+        try {
+          update.seasonal = JSON.parse(seasonal);
+        } catch (e) {
+          console.warn('Failed to parse seasonal:', e);
+          update.seasonal = null;
+        }
+      } else {
+        update.seasonal = seasonal;
+      }
+    }
+
     // Handle Cloudinary image URLs from middleware
     if (req.files && req.files.length > 0) {
-      update.image = req.files[0].path; // Cloudinary secure_url
+      const f = req.files[0];
+      update.image = f.secure_url || f.path || f.url;
     } else if (image !== undefined) {
       update.image = image;
     }
@@ -1319,23 +1335,24 @@ exports.addMenuItem = async (req, res) => {
   try {
     console.log('addMenuItem called. Request body:', req.body);
     const { 
-      name, 
-      description, 
-      category, 
-      price, 
+      name,
+      description,
+      category,
+      price,
       discountedPrice,
       image,
       allergens,
       preparationTime,
-      status, 
+      status,
       isVeg,
       moodTag,
       hungerLevelTag,
       recommendedItems,
       nutritionInfo,
-      specialOffer
+      specialOffer,
+      seasonal
     } = req.body;
-    
+
     // Validate required fields
     if (!name || !category || !price || !description) {
       console.warn('Validation failed. Missing required fields:', { name, category, price, description });
@@ -1384,6 +1401,15 @@ exports.addMenuItem = async (req, res) => {
       }
     }
 
+    let parsedSeasonal = null;
+    if (seasonal) {
+      try {
+        parsedSeasonal = typeof seasonal === 'string' ? JSON.parse(seasonal) : seasonal;
+      } catch (e) {
+        console.warn('Failed to parse seasonal:', e);
+      }
+    }
+
     // Validate recommendedItems exist if provided
     if (parsedRecommendedItems && parsedRecommendedItems.length > 0) {
       const validItems = await MenuItem.find({ _id: { $in: parsedRecommendedItems } });
@@ -1395,8 +1421,8 @@ exports.addMenuItem = async (req, res) => {
     // Handle Cloudinary image URLs from middleware
     let imageUrl = image;
     if (req.files && req.files.length > 0) {
-      // Cloudinary middleware will store uploaded file info in req.files
-      imageUrl = req.files[0].path; // Cloudinary secure_url
+      const f = req.files[0];
+      imageUrl = f.secure_url || f.path || f.url;
     }
     
     const itemData = {
@@ -1414,6 +1440,7 @@ exports.addMenuItem = async (req, res) => {
       hungerLevelTag: hungerLevelTag || null,
       recommendedItems: parsedRecommendedItems,
       specialOffer: parsedSpecialOffer,
+      seasonal: parsedSeasonal,
       nutritionInfo: nutritionInfo || {
         calories: 0,
         protein: 0,

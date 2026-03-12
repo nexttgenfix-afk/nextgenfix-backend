@@ -7,13 +7,15 @@ dotenv.config();
 const hasCloudinaryEnv = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
 
 if (hasCloudinaryEnv) {
-  const cloudinary = cloudinaryLib.v2;
-  cloudinary.config({
+  // Configure via the top-level package so multer-storage-cloudinary v2
+  // can access cloudinaryLib.v2.uploader internally.
+  cloudinaryLib.v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
     timeout: 120000 // 2 minutes timeout for uploads
   });
+  const cloudinary = cloudinaryLib;
 
   // Configure storage for menu item photos
   const menuItemPhotoStorage = new CloudinaryStorage({

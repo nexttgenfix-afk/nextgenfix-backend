@@ -19,6 +19,7 @@ require('dotenv').config();
 const Admin = require('../models/adminModel');
 const Settings = require('../models/settingsModel');
 const Category = require('../models/categoryModel');
+const MenuItem = require('../models/menuItemModel');
 
 // Database connection
 const connectDB = async () => {
@@ -232,6 +233,115 @@ const createSampleCategories = async () => {
   }
 };
 
+// Create season special menu items
+const createSeasonSpecialItems = async (categories) => {
+  try {
+    const existingSeasonals = await MenuItem.findOne({ 'seasonal.isSeasonSpecial': true });
+    if (existingSeasonals) {
+      console.log('ℹ️  Season special items already exist');
+      return;
+    }
+
+    const mainCourse = categories.find(c => c.name === 'Main Course');
+    const appetizers = categories.find(c => c.name === 'Appetizers');
+    const beverages = categories.find(c => c.name === 'Beverages');
+    const desserts = categories.find(c => c.name === 'Desserts');
+
+    const now = new Date();
+    const seasonFrom = new Date(now);
+    const seasonUntil = new Date(now);
+    seasonUntil.setMonth(seasonUntil.getMonth() + 3);
+
+    const placeholder = 'https://placehold.co/400x300/orange/white?text=Season+Special';
+
+    const seasonSpecials = [
+      {
+        name: 'Mango Lassi Bowl',
+        description: { text: 'Thick chilled mango lassi served as a wholesome bowl with fresh alphonso mango chunks and a sprinkle of cardamom.', formatting: 'PlainText' },
+        category: beverages?._id || appetizers?._id,
+        price: 199,
+        discountedPrice: 169,
+        image: placeholder,
+        isVeg: true,
+        status: 'Available',
+        preparationTime: 10,
+        moodTag: 'bougie',
+        hungerLevelTag: 'little_hungry',
+        allergens: ['dairy'],
+        seasonal: { isSeasonSpecial: true, seasonalFrom: seasonFrom, seasonalUntil: seasonUntil },
+        nutritionInfo: { calories: 280, protein: 6, carbs: 45, fat: 8 },
+      },
+      {
+        name: 'Raw Mango Chaat',
+        description: { text: 'Tangy raw mango tossed with chaat masala, red onion, coriander, and pomegranate — a summer riot of flavours.', formatting: 'PlainText' },
+        category: appetizers?._id || mainCourse?._id,
+        price: 179,
+        image: placeholder,
+        isVeg: true,
+        status: 'Available',
+        preparationTime: 15,
+        moodTag: 'locked_in',
+        hungerLevelTag: 'quite_hungry',
+        allergens: [],
+        seasonal: { isSeasonSpecial: true, seasonalFrom: seasonFrom, seasonalUntil: seasonUntil },
+        nutritionInfo: { calories: 150, protein: 3, carbs: 30, fat: 2 },
+      },
+      {
+        name: 'Watermelon Feta Salad',
+        description: { text: 'Chilled watermelon cubes paired with crumbled feta, mint leaves, and a honey-lime drizzle. Light, fresh, and perfect for summer.', formatting: 'PlainText' },
+        category: appetizers?._id || mainCourse?._id,
+        price: 229,
+        image: placeholder,
+        isVeg: true,
+        status: 'Available',
+        preparationTime: 10,
+        moodTag: 'bougie',
+        hungerLevelTag: 'little_hungry',
+        allergens: ['dairy'],
+        seasonal: { isSeasonSpecial: true, seasonalFrom: seasonFrom, seasonalUntil: seasonUntil },
+        nutritionInfo: { calories: 180, protein: 5, carbs: 22, fat: 8 },
+      },
+      {
+        name: 'Kachi Kairi Panna',
+        description: { text: "Traditional raw mango cooler blended with roasted cumin, black salt, and fresh mint. Nature's best summer refresher.", formatting: 'PlainText' },
+        category: beverages?._id || appetizers?._id,
+        price: 99,
+        image: placeholder,
+        isVeg: true,
+        status: 'Available',
+        preparationTime: 5,
+        moodTag: 'homesick',
+        hungerLevelTag: 'little_hungry',
+        allergens: [],
+        seasonal: { isSeasonSpecial: true, seasonalFrom: seasonFrom, seasonalUntil: seasonUntil },
+        nutritionInfo: { calories: 80, protein: 1, carbs: 20, fat: 0 },
+      },
+      {
+        name: 'Mango Sticky Rice',
+        description: { text: 'Thai-inspired sweet sticky rice topped with fresh mango slices and a drizzle of coconut cream. A seasonal dessert delight.', formatting: 'PlainText' },
+        category: desserts?._id || mainCourse?._id,
+        price: 249,
+        image: placeholder,
+        isVeg: true,
+        status: 'Available',
+        preparationTime: 20,
+        moodTag: 'need_a_hug',
+        hungerLevelTag: 'quite_hungry',
+        allergens: ['gluten'],
+        seasonal: { isSeasonSpecial: true, seasonalFrom: seasonFrom, seasonalUntil: seasonUntil },
+        nutritionInfo: { calories: 380, protein: 5, carbs: 72, fat: 9 },
+      },
+    ];
+
+    await MenuItem.insertMany(seasonSpecials);
+    console.log('✅ Season special menu items created successfully');
+    console.log(`   Created ${seasonSpecials.length} seasonal items (valid until ${seasonUntil.toDateString()})`);
+  } catch (error) {
+    console.error('❌ Error creating season special items:', error);
+    throw error;
+  }
+};
+
 // Main seed function
 const seedDatabase = async () => {
   console.log('🌱 Starting database seeding...\n');
@@ -245,9 +355,12 @@ const seedDatabase = async () => {
     await createDefaultSettings();
     console.log('');
     
-    await createSampleCategories();
+    const categories = await createSampleCategories();
     console.log('');
-    
+
+    await createSeasonSpecialItems(categories);
+    console.log('');
+
     console.log('✅ Database seeding completed successfully!\n');
     console.log('📝 Next Steps:');
     console.log('   1. Login to admin panel with admin@example.com / admin123');
