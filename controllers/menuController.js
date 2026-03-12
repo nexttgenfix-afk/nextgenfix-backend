@@ -196,10 +196,16 @@ const getMenuItemById = async (req, res) => {
       description: menuItem.description?.text || '',
       price: menuItem.price,
       discountedPrice: menuItem.discountedPrice || null,
-      image: menuItem.image,
+      // Unified image: prefer photos.main, fall back to legacy image field
+      photos: {
+        main: menuItem.photos?.main || menuItem.image || '',
+        additional: menuItem.photos?.additional || []
+      },
       isVeg: menuItem.isVeg,
       category: menuItem.category,
       badge: menuItem.badge || null,
+      moodTag: menuItem.moodTag || null,
+      hungerLevelTag: menuItem.hungerLevelTag || null,
       status: menuItem.status,
       isAvailable: menuItem.isAvailable,
       preparationTime: menuItem.preparationTime,
@@ -214,6 +220,7 @@ const getMenuItemById = async (req, res) => {
       carbs: menuItem.nutritionInfo?.carbs || 0,
       fat: menuItem.nutritionInfo?.fat || 0,
       fiber: menuItem.nutritionInfo?.fiber || 0,
+      sugar: menuItem.nutritionInfo?.sugar || 0,
       servingSize: menuItem.nutritionInfo?.servingSize || '1 serving',
       // Customization
       customizationOptions: menuItem.customizationOptions || {},
@@ -222,8 +229,7 @@ const getMenuItemById = async (req, res) => {
       // Seasonal & special offer
       isSeasonSpecial: menuItem.seasonal?.isSeasonSpecial || false,
       specialOffer: menuItem.specialOffer || null,
-      // Photos & videos
-      photos: menuItem.photos || {},
+      // Videos
       videos: menuItem.videos || {}
     };
 
@@ -281,10 +287,16 @@ const createMenuItem = async (req, res) => {
       category,
       isVeg,
       preparationTime,
-      ingredients,
-      nutritionalInfo,
+      cuisine,
+      oilType,
+      nutritionInfo,
       tags,
-      allergens
+      allergens,
+      keyIngredients,
+      badge,
+      moodTag,
+      hungerLevelTag,
+      seasonal
     } = req.body;
 
     // Handle image upload
@@ -343,12 +355,20 @@ const createMenuItem = async (req, res) => {
       price: priceNum,
       category,
       image: imageUrl,
+      'photos.main': imageUrl,
       isVeg: isVeg === 'true',
-      ingredients,
-      nutritionalInfo,
-      tags: tags ? tags.split(',').map(tag => tag.trim()) : [],
-      allergens: allergens ? allergens.split(',').map(allergen => allergen.trim()) : []
+      tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim())) : [],
+      allergens: allergens ? (Array.isArray(allergens) ? allergens : allergens.split(',').map(a => a.trim())) : [],
+      keyIngredients: keyIngredients ? (Array.isArray(keyIngredients) ? keyIngredients : keyIngredients.split(',').map(k => k.trim())) : []
     };
+
+    if (cuisine) menuItemData.cuisine = cuisine;
+    if (oilType) menuItemData.oilType = oilType;
+    if (badge) menuItemData.badge = badge;
+    if (moodTag) menuItemData.moodTag = moodTag;
+    if (hungerLevelTag) menuItemData.hungerLevelTag = hungerLevelTag;
+    if (nutritionInfo) menuItemData.nutritionInfo = nutritionInfo;
+    if (seasonal) menuItemData.seasonal = seasonal;
 
     // preparationTime is optional — only set when valid
     const prep = preparationTime !== undefined ? parseInt(preparationTime) : undefined;
@@ -377,10 +397,16 @@ const updateMenuItem = async (req, res) => {
       category,
       isVeg,
       preparationTime,
-      ingredients,
-      nutritionalInfo,
+      cuisine,
+      oilType,
+      nutritionInfo,
       tags,
       allergens,
+      keyIngredients,
+      badge,
+      moodTag,
+      hungerLevelTag,
+      seasonal,
       isAvailable
     } = req.body;
 
@@ -391,18 +417,23 @@ const updateMenuItem = async (req, res) => {
 
     // Handle image upload
     if (req.file) {
-      // Delete old image if exists
-      if (menuItem.image) {
-        await deleteImage(menuItem.image);
-      }
+      if (menuItem.image) await deleteImage(menuItem.image);
+      let newImageUrl = null;
       if (req.file.path || req.file.secure_url || req.file.url) {
-        menuItem.image = req.file.path || req.file.secure_url || req.file.url;
+        newImageUrl = req.file.path || req.file.secure_url || req.file.url;
       } else if (req.file.location) {
-        menuItem.image = req.file.location;
+        newImageUrl = req.file.location;
       } else if (req.file.buffer) {
         const result = await uploadImage(req.file.buffer, 'menu-items');
-        menuItem.image = result?.url || result;
+        newImageUrl = result?.url || result;
       }
+      if (newImageUrl) {
+        menuItem.image = newImageUrl;
+        menuItem.photos = { ...menuItem.photos, main: newImageUrl };
+      }
+    } else if (req.body.image) {
+      menuItem.image = req.body.image;
+      menuItem.photos = { ...menuItem.photos, main: req.body.image };
     }
 
     // Update fields
@@ -427,10 +458,16 @@ const updateMenuItem = async (req, res) => {
       const p = parseInt(preparationTime);
       if (!isNaN(p)) menuItem.preparationTime = p;
     }
-    if (ingredients) menuItem.ingredients = ingredients;
-    if (nutritionalInfo) menuItem.nutritionalInfo = nutritionalInfo;
-    if (tags) menuItem.tags = tags.split(',').map(tag => tag.trim());
-    if (allergens) menuItem.allergens = allergens.split(',').map(allergen => allergen.trim());
+    if (cuisine) menuItem.cuisine = cuisine;
+    if (oilType) menuItem.oilType = oilType;
+    if (badge !== undefined) menuItem.badge = badge;
+    if (moodTag !== undefined) menuItem.moodTag = moodTag;
+    if (hungerLevelTag !== undefined) menuItem.hungerLevelTag = hungerLevelTag;
+    if (nutritionInfo) menuItem.nutritionInfo = nutritionInfo;
+    if (seasonal) menuItem.seasonal = seasonal;
+    if (tags) menuItem.tags = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim());
+    if (allergens) menuItem.allergens = Array.isArray(allergens) ? allergens : allergens.split(',').map(a => a.trim());
+    if (keyIngredients) menuItem.keyIngredients = Array.isArray(keyIngredients) ? keyIngredients : keyIngredients.split(',').map(k => k.trim());
     if (isAvailable !== undefined) menuItem.isAvailable = isAvailable === 'true';
 
     await menuItem.save();

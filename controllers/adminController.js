@@ -1173,7 +1173,7 @@ exports.updateMenuItem = async (req, res) => {
     } = req.body;
 
     // Validate mood and hunger level tags if provided
-    const validMoodTags = ['good', 'angry', 'in_love', 'sad'];
+    const validMoodTags = ['locked_in', 'bougie', 'homesick', 'burnt_tf_out', 'need_a_hug'];
     const validHungerLevelTags = ['little_hungry', 'quite_hungry', 'very_hungry', 'super_hungry'];
     
     if (moodTag && !validMoodTags.includes(moodTag)) {
@@ -1343,7 +1343,7 @@ exports.addMenuItem = async (req, res) => {
     }
 
     // Validate mood and hunger level tags if provided
-    const validMoodTags = ['good', 'angry', 'in_love', 'sad'];
+    const validMoodTags = ['locked_in', 'bougie', 'homesick', 'burnt_tf_out', 'need_a_hug'];
     const validHungerLevelTags = ['little_hungry', 'quite_hungry', 'very_hungry', 'super_hungry'];
     
     if (moodTag && !validMoodTags.includes(moodTag)) {

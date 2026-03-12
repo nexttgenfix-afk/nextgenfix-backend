@@ -865,7 +865,7 @@ exports.getMenuItemsByMood = async (req, res) => {
     const { mood } = req.params;
     const { page = 1, limit = 20 } = req.query;
 
-    const validMoodTags = ['good', 'angry', 'in_love', 'sad'];
+    const validMoodTags = ['locked_in', 'bougie', 'homesick', 'burnt_tf_out', 'need_a_hug'];
     if (!validMoodTags.includes(mood)) {
       return res.status(400).json({ 
         success: false,
