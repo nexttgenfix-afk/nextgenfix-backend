@@ -153,20 +153,39 @@ const createOrder = async (req, res) => {
 
     // Apply coupon if provided
     let appliedCoupon = null;
+    let deliveryFee = orderType === 'delivery' ? 40 : 0; // default delivery fee
+    let freeDelivery = false;
     if (couponCode) {
       const Coupon = require('../models/couponModel');
       const coupon = await Coupon.findOne({ code: couponCode, isActive: true, validUntil: { $gt: new Date() } });
       if (coupon) {
+        // Issue 5: validate minOrderValue
+        if (coupon.minOrderValue && totalAmount < coupon.minOrderValue) {
+          return res.status(400).json({
+            success: false,
+            message: `Minimum order value of ₹${coupon.minOrderValue} required to use this coupon`
+          });
+        }
         appliedCoupon = coupon._id;
         if (coupon.discountType === 'percentage') {
+          // Issue 2: apply maxDiscount cap
           discountAmount = (totalAmount * coupon.discountValue) / 100;
+          if (coupon.maxDiscount) discountAmount = Math.min(discountAmount, coupon.maxDiscount);
         } else if (coupon.discountType === 'fixed') {
           discountAmount = Math.min(coupon.discountValue, totalAmount);
+        } else if (coupon.discountType === 'free_delivery') {
+          // Issue 3: handle free_delivery
+          freeDelivery = true;
+          deliveryFee = 0;
+        } else if (coupon.discountType === 'bogo') {
+          // Issue 3: handle bogo — discount = price of cheapest item
+          const prices = orderItems.map(i => i.price);
+          if (prices.length > 0) discountAmount = Math.min(...prices);
         }
       }
     }
 
-    const finalAmount = totalAmount - discountAmount;
+    const finalAmount = totalAmount + deliveryFee - discountAmount;
 
     // Handle wallet payment
     const { useWallet = false, walletAmount = 0 } = req.body;
@@ -224,6 +243,7 @@ const createOrder = async (req, res) => {
       items: orderItems,
       billing: {
         subtotal: totalAmount,
+        deliveryFee,
         discounts: {
           totalDiscount: discountAmount,
           walletPayment: {
@@ -246,7 +266,7 @@ const createOrder = async (req, res) => {
     // Update menu item order counts
     for (const item of orderItems) {
       await MenuItem.findByIdAndUpdate(item.itemId, {
-        $inc: { orderCount: item.quantity }
+        $inc: { 'popularity.orderCount': item.quantity }
       });
     }
 

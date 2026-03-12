@@ -42,11 +42,11 @@ exports.getUserCoupons = async (req, res) => {
     const now = new Date();
     const coupons = await Coupon.find({
       isActive: true,
-      isLocked: false,
-      refunded: false,
+      isLocked: { $ne: true },
+      refunded: { $ne: true },
       validFrom: { $lte: now },
       validUntil: { $gt: now },
-      'meta.origin': null  // exclude referral/spin coupons
+      'meta.origin': { $nin: ['referral', 'spin_wheel'] }
     })
       .select('code title discountType discountValue minOrderValue maxDiscount termsAndConditions validUntil applicableTiers')
       .sort({ validUntil: 1 });
