@@ -247,6 +247,12 @@ const userSchema = new mongoose.Schema({
     min: 0
   },
 
+  // Profile completion flag
+  isProfileComplete: {
+    type: Boolean,
+    default: false
+  },
+
   // Account Status
   status: {
     type: String,

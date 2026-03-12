@@ -473,7 +473,7 @@ exports.verifyOtp = async (req, res) => {
     message: "Login successful",
     token,
     user,
-    isProfileComplete:"false"
+    isProfileComplete: user.isProfileComplete || false
   });
 };
 
@@ -525,7 +525,7 @@ exports.verifyFirebaseToken = async (req, res) => {
       message: "Login successful",
       token,
       user,
-      isProfileComplete: !!(user.name && user.dietPreference && user.eatingPreference)
+      isProfileComplete: user.isProfileComplete || false
     });
   } catch (error) {
     console.error('[verifyFirebaseToken] Error verifying Firebase token:', error);
@@ -577,17 +577,10 @@ exports.getProfile = async (req, res) => {
     const user = await User.findById(req.user.id).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Check if user has completed their profile
-    const isProfileComplete = Boolean(
-      user.name && 
-      user.dietPreference && 
-      user.eatingPreference
-    );
-
     res.status(200).json({
       message: "User profile fetched successfully",
       user,
-      isProfileComplete
+      isProfileComplete: user.isProfileComplete || false
     });
   } catch (err) {
     console.error("Error fetching profile:", err);
@@ -1171,7 +1164,12 @@ exports.completePersonalDetails = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     if (name !== undefined) user.name = name;
-    if (phone !== undefined) user.phone = phone;
+    if (phone !== undefined) {
+      const normalize = (p) => p.replace(/^\+?91/, '').replace(/\s+/g, '');
+      if (normalize(phone) !== normalize(user.phone || '')) {
+        return res.status(400).json({ message: 'Phone number does not match your account' });
+      }
+    }
     if (calorieGoal !== undefined) user.calorieGoal = calorieGoal;
     if (allergens !== undefined) user.allergens = allergens;
 
@@ -1263,12 +1261,14 @@ exports.completePersonalDetails = async (req, res) => {
       };
     }
 
+    user.isProfileComplete = true;
     await user.save();
 
     res.status(200).json({
       success: true,
       message: 'Onboarding completed successfully',
       user,
+      isProfileComplete: true,
       ...(referralResult && { referral: referralResult })
     });
   } catch (err) {
