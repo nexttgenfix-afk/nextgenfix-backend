@@ -14,6 +14,7 @@ const getCart = async (req, res) => {
       .populate('items.menuItem', 'name price image category nutritionInfo.calories')
       .populate('user', 'name email phone');
 
+    let isNewCart = false;
     if (!cart) {
       // Create empty cart if none exists
       cart = new Cart({
@@ -24,11 +25,13 @@ const getCart = async (req, res) => {
       await cart.save();
       await cart.populate('items.menuItem', 'name price image category nutritionInfo.calories');
       await cart.populate('user', 'name email phone');
+      isNewCart = true;
     }
 
     res.status(200).json({
       success: true,
       cart,
+      isNewCart,
       isGuest: req.isGuest
     });
   } catch (error) {
@@ -231,15 +234,17 @@ const clearCart = async (req, res) => {
       });
     }
 
+    console.warn(`[clearCart] Cart cleared for userId=${userId}, cartId=${cart._id}, itemCount=${cart.items.length}`);
     cart.items = [];
     cart.totalAmount = 0;
+    cart.discountAmount = 0;
+    cart.finalAmount = 0;
     cart.coupon = null;
-    cart.discount = 0;
     await cart.save();
 
     res.status(200).json({
       success: true,
-      message: 'Cart cleared',
+      message: 'Cart cleared successfully',
       cart,
       isGuest: req.isGuest
     });
@@ -330,7 +335,7 @@ const removeCoupon = async (req, res) => {
     }
 
     cart.coupon = null;
-    cart.discount = 0;
+    cart.discountAmount = 0;
     await cart.calculateTotal();
     await cart.save();
 
@@ -374,8 +379,8 @@ const getCartSummary = async (req, res) => {
     const summary = {
       itemCount: cart.items.length,
       totalAmount: cart.totalAmount,
-      discount: cart.discount,
-      finalAmount: cart.totalAmount - cart.discount,
+      discount: cart.discountAmount,
+      finalAmount: cart.totalAmount - cart.discountAmount,
       items: cart.items,
       coupon: cart.coupon
     };

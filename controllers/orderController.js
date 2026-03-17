@@ -103,7 +103,7 @@ const createOrder = async (req, res) => {
       }
     } else {
       // From cart (existing logic)
-      const cart = await Cart.findOne({ user: req.user.id })
+      const cart = await Cart.findOne({ user: req.userId })
         .populate('items.menuItem')
         .populate('coupon');
 
@@ -309,7 +309,7 @@ const createOrder = async (req, res) => {
 
     // Clear cart after order creation if cart was used
     if (!items || items.length === 0) {
-      const cart = await Cart.findOne({ user: req.user.id });
+      const cart = await Cart.findOne({ user: req.userId });
       if (cart) {
         await Cart.findByIdAndUpdate(cart._id, {
           items: [],
@@ -536,9 +536,9 @@ const reorder = async (req, res) => {
     }
 
     // Get user's cart
-    let cart = await Cart.findOne({ user: req.user.id });
+    let cart = await Cart.findOne({ user: req.userId });
     if (!cart) {
-      cart = await Cart.create({ user: req.user.id, items: [] });
+      cart = await Cart.create({ user: req.userId, items: [] });
     }
 
     // Add order items to cart

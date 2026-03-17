@@ -205,10 +205,12 @@ const getGuestStats = async () => {
 const cleanupExpiredGuests = async () => {
   const now = new Date();
 
-  // Find expired guests
+  // Find expired guests (24h grace period — expired token is rejected immediately by auth
+  // middleware, but we wait 24h before physically deleting carts and user records)
+  const gracePeriodCutoff = new Date(now - 24 * 60 * 60 * 1000);
   const expiredGuests = await User.find({
     isGuest: true,
-    guestExpiresAt: { $lte: now }
+    guestExpiresAt: { $lte: gracePeriodCutoff }
   });
 
   let deletedUsers = 0;
