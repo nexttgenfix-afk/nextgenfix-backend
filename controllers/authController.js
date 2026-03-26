@@ -929,10 +929,33 @@ const verifyWhatsappOtp = async (req, res) => {
       console.log('✅ Existing WhatsApp user logged in:', user._id);
     }
 
+    // ⭐ Check for guest token and merge cart/data into the authenticated user
+    const guestToken = req.headers['x-guest-token'];
+    let mergeMessage = null;
+
+    if (guestToken) {
+      try {
+        const guestService = require('../services/guestService');
+        const decoded = await verifyToken(guestToken);
+        const guestUser = await User.findById(decoded.userId);
+
+        if (guestUser && guestUser.isGuest) {
+          const mergeResult = await guestService.mergeGuestToUser(user._id, guestUser._id);
+          if (mergeResult.success) {
+            mergeMessage = 'Your cart and saved data have been restored!';
+          }
+        }
+      } catch (error) {
+        console.error('Guest merge error during WhatsApp OTP verify:', error);
+        // Don't fail OTP verification if merge fails
+      }
+    }
+
     const token = generateToken(user._id, 'user');
 
     return res.status(200).json({
       success: true,
+      message: mergeMessage || 'OTP verified successfully',
       token,
       user: {
         id: user._id,
@@ -943,7 +966,8 @@ const verifyWhatsappOtp = async (req, res) => {
         referralCode: user.referralCode,
         authProvider: user.authProvider,
         isGuest: user.isGuest
-      }
+      },
+      dataRestored: !!mergeMessage
     });
   } catch (error) {
     console.error('verifyWhatsappOtp error:', error);
