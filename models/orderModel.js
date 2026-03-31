@@ -201,6 +201,10 @@ const orderSchema = new mongoose.Schema({
   estimatedDeliveryTime: {
     type: Date
   },
+  preparationTime: {
+    type: Number,
+    default: null // in minutes, set to max(items.preparationTime) when status → preparing
+  },
   deliveredAt: {
     type: Date
   },

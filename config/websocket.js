@@ -23,10 +23,14 @@ wss.on('connection', (ws, req) => {
 });
 
 // Emit order status updates
-exports.emitOrderStatusUpdate = (userId, orderId, status) => {
+exports.emitOrderStatusUpdate = (userId, orderId, status, preparationTime = null) => {
   const ws = clients.get(userId);
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ orderId, status }));
+    const payload = { orderId, status };
+    if (status === 'preparing' && preparationTime !== null) {
+      payload.preparationTime = preparationTime;
+    }
+    ws.send(JSON.stringify(payload));
   }
 };
 

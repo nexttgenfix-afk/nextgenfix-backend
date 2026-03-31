@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const { initiatePayment, verifyPayment } = require('../services/payment');
 const { createNotification } = require('../services/notification');
 const { updateUserTier } = require('../services/tier');
+const { emitOrderStatusUpdate } = require('../config/websocket');
 const walletService = require('../services/walletService');
 
 // Update the daily nutrition log when an order is placed
@@ -458,6 +459,14 @@ const cancelOrder = async (req, res) => {
       });
     }
 
+    // Enforce 30-second cancellation window
+    const secondsSincePlaced = (Date.now() - new Date(order.createdAt).getTime()) / 1000;
+    if (secondsSincePlaced > 30) {
+      return res.status(400).json({
+        message: 'Order can only be cancelled within 30 seconds of placing'
+      });
+    }
+
     // Refund wallet payment if applicable
     if (order.billing?.paidViaWallet && order.billing?.discounts?.walletPayment?.amount > 0) {
       try {
@@ -648,7 +657,8 @@ const updateOrderStatus = async (req, res) => {
     }
 
     const order = await Order.findById(req.params.id)
-      .populate('user', 'name');
+      .populate('user', 'name')
+      .populate('items.itemId', 'preparationTime');
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
@@ -688,10 +698,18 @@ const updateOrderStatus = async (req, res) => {
       notes: notes || ''
     });
 
-    // Set estimated delivery time for certain statuses
-    if (mappedStatus === 'preparing' || mappedStatus === 'out-for-delivery') {
-      // Set an estimated delivery time only when moving to preparing or dispatched
-      order.estimatedDeliveryTime = new Date(Date.now() + 45 * 60 * 1000); // 45 minutes
+    // Calculate and store preparation time when order moves to preparing
+    if (mappedStatus === 'preparing') {
+      const prepTimes = order.items
+        .map(item => item.itemId && item.itemId.preparationTime)
+        .filter(t => typeof t === 'number' && t > 0);
+      order.preparationTime = prepTimes.length > 0 ? Math.max(...prepTimes) : 30;
+      order.estimatedDeliveryTime = new Date(Date.now() + order.preparationTime * 60 * 1000);
+    }
+
+    // Set estimated delivery time when dispatched (fixed 45 min from dispatch)
+    if (mappedStatus === 'out-for-delivery') {
+      order.estimatedDeliveryTime = new Date(Date.now() + 45 * 60 * 1000);
     }
 
     if (mappedStatus === 'delivered') {
@@ -718,15 +736,31 @@ const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    // Create notification for user (send user id)
+    const notifyUserId = order.user && order.user._id ? order.user._id : order.user;
+
+    // Emit real-time WebSocket update to the user
     try {
-      const notifyUserId = order.user && order.user._id ? order.user._id : order.user;
+      emitOrderStatusUpdate(notifyUserId.toString(), order._id.toString(), mappedStatus, order.preparationTime);
+    } catch (wsErr) {
+      console.error('WebSocket emit error:', wsErr);
+    }
+
+    // Create notification for user
+    try {
+      const notifMessage = mappedStatus === 'preparing' && order.preparationTime
+        ? `Your order #${order.orderNumber || order._id} is being prepared. Estimated time: ${order.preparationTime} minutes.`
+        : `Your order #${order.orderNumber || order._id} status changed to ${requestedStatus}`;
+
       await createNotification({
         userId: notifyUserId,
         title: 'Order Status Updated',
-        message: `Your order #${order.orderNumber || order._id} status changed to ${requestedStatus}`,
+        message: notifMessage,
         type: 'order',
-        data: { orderId: order._id }
+        data: {
+          orderId: order._id,
+          status: mappedStatus,
+          ...(mappedStatus === 'preparing' && { preparationTime: order.preparationTime })
+        }
       });
     } catch (notifErr) {
       console.error('Notification error after status update:', notifErr);
