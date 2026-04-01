@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const { initiatePayment, verifyPayment } = require('../services/payment');
 const { createNotification } = require('../services/notification');
 const { updateUserTier } = require('../services/tier');
+const Settings = require('../models/settingsModel');
 const { emitOrderStatusUpdate } = require('../config/websocket');
 const walletService = require('../services/walletService');
 
@@ -730,7 +731,7 @@ const updateOrderStatus = async (req, res) => {
     if (mappedStatus === 'delivered') {
       order.deliveredAt = new Date();
 
-      // Update user tier and total spent (use billing.totalAmount if present)
+      // Update user total spent, increment monthly order count, recalculate tier, and award nanoPoints
       try {
         const userId = order.user && order.user._id ? order.user._id : order.user;
         const user = await User.findById(userId);
@@ -738,10 +739,31 @@ const updateOrderStatus = async (req, res) => {
           const amount = (order.billing && order.billing.totalAmount) || order.totalAmount || 0;
           user.totalSpent = (user.totalSpent || 0) + amount;
           await user.save();
+
+          // Increment currentMonthOrders and recalculate tier
           try {
             await updateUserTier(user._id);
           } catch (tierErr) {
             console.error('updateUserTier error for user', user._id, tierErr);
+          }
+
+          // Award nanoPoints for the order
+          try {
+            const settings = await Settings.getSettings();
+            const pointsToAward = settings.loyaltyConfig?.nanoPointsPerOrder || 10;
+            await User.findByIdAndUpdate(user._id, {
+              $inc: { nanoPoints: pointsToAward },
+              $push: {
+                nanoPointsHistory: {
+                  points: pointsToAward,
+                  type: 'earn',
+                  description: `Earned for completing order #${order.orderNumber || order._id}`
+                }
+              }
+            });
+            await Order.findByIdAndUpdate(order._id, { nanoPointsEarned: pointsToAward });
+          } catch (pointsErr) {
+            console.error('nanoPoints award error for order', order._id, pointsErr);
           }
         }
       } catch (userErr) {

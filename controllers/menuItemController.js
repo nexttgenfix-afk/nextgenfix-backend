@@ -755,6 +755,10 @@ exports.searchMenuItems = async (req, res) => {
       filter.category = category;
     }
 
+    if (req.query.subcategory && mongoose.Types.ObjectId.isValid(req.query.subcategory)) {
+      filter.subcategory = req.query.subcategory;
+    }
+
     if (isVeg !== undefined) {
       filter.isVeg = isVeg === 'true';
     }

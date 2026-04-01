@@ -943,7 +943,14 @@ const Category = require('../models/categoryModel');
 // List all categories (admin action)
 exports.getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ name: 1 });
+    const { all, parentCategory } = req.query;
+    const filter = {};
+    if (parentCategory) {
+      filter.parentCategory = parentCategory;
+    } else if (all !== 'true') {
+      filter.parentCategory = null;
+    }
+    const categories = await Category.find(filter).sort({ name: 1 });
     res.status(200).json({ categories });
   } catch (err) {
     console.error('Get categories error:', err);

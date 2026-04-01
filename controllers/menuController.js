@@ -343,10 +343,15 @@ const createMenuItem = async (req, res) => {
     const priceNum = parseFloat(price);
     if (isNaN(priceNum)) return res.status(400).json({ message: 'Valid price is required' });
 
-    // Category must be a Category ObjectId
+    // Category/Subcategory must be a Category ObjectId
     const mongoose = require('mongoose');
     if (!category || !mongoose.Types.ObjectId.isValid(category)) {
       return res.status(400).json({ message: 'Valid category id is required' });
+    }
+
+    const subcategory = req.body.subcategory;
+    if (subcategory && !mongoose.Types.ObjectId.isValid(subcategory)) {
+      return res.status(400).json({ message: 'Invalid subcategory id format' });
     }
 
     const menuItemData = {
@@ -354,6 +359,7 @@ const createMenuItem = async (req, res) => {
       description: descriptionObj,
       price: priceNum,
       category,
+      subcategory: subcategory || null,
       image: imageUrl,
       'photos.main': imageUrl,
       isVeg: isVeg === 'true',
@@ -452,6 +458,12 @@ const updateMenuItem = async (req, res) => {
         return res.status(400).json({ message: 'Invalid category id' });
       }
       menuItem.category = category;
+    }
+    if (req.body.subcategory !== undefined) {
+      if (req.body.subcategory && !mongoose.Types.ObjectId.isValid(req.body.subcategory)) {
+        return res.status(400).json({ message: 'Invalid subcategory id' });
+      }
+      menuItem.subcategory = req.body.subcategory || null;
     }
     if (isVeg !== undefined) menuItem.isVeg = isVeg === 'true';
     if (preparationTime !== undefined) {
