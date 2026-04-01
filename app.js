@@ -47,17 +47,24 @@ const app = express();
 connectDB();
 
 // Middleware
+const adminUrl = process.env.ADMIN_PANEL_URL;
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001')
   .split(',')
   .map(s => s.trim());
+
+// Always include adminUrl if provided
+if (adminUrl && !allowedOrigins.includes(adminUrl)) {
+  allowedOrigins.push(adminUrl);
+}
 
 app.use(cors({
   origin: function (origin, callback) {
     // allow requests with no origin (e.g., mobile apps, curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked for origin: ${origin}`);
       callback(new Error('CORS policy: Origin not allowed'));
     }
   },
@@ -155,11 +162,17 @@ const server = app.listen(PORT, () => {
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
-  console.log(`Error: ${err.message}`);
-  // Close server & exit process
-  server.close(() => {
-    process.exit(1);
-  });
+  console.error(`❌ Unhandled Rejection at: ${promise} reason: ${err.message}`);
+  // Do NOT exit process for transient connection errors; log stack for debugging
+  console.error(err.stack);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error(`❌ Uncaught Exception: ${err.message}`);
+  console.error(err.stack);
+  // Optional: exit for truly critical errors if needed
+  // process.exit(1);
 });
 
 module.exports = app;

@@ -11,7 +11,15 @@ const connectDB = async () => {
     // This helps during incremental removals of fields like `chefId` without crashing.
     mongoose.set('strictPopulate', false);
     // mongoose v6+ uses sensible defaults; avoid passing deprecated driver options
-    const conn = await mongoose.connect(uri);
+    const conn = await mongoose.connect(uri, {
+      maxPoolSize: 10,
+      minPoolSize: 5,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      family: 4, // Use IPv4
+      retryWrites: true,
+      w: 'majority'
+    });
 
     // In production, consider disabling auto index builds and manage indexes via migrations:
     // mongoose.set('autoIndex', false);
