@@ -28,6 +28,49 @@ const categories = [
     displayOrder: 3,
     isActive: true
   },
+  // --- Subcategories for Desi AF ---
+  {
+    name: 'Tikka Section',
+    description: 'Grilled and tandoori starters',
+    parentCategory: 'Desi AF',
+    displayOrder: 1,
+    isActive: true
+  },
+  {
+    name: 'Bread Winners',
+    description: 'Assorted Indian breads',
+    parentCategory: 'Desi AF',
+    displayOrder: 2,
+    isActive: true
+  },
+  {
+    name: 'Mood for makahni',
+    description: 'Creamy and rich gravies',
+    parentCategory: 'Desi AF',
+    displayOrder: 3,
+    isActive: true
+  },
+  {
+    name: 'One Grain Wonder',
+    description: 'Rice and biryani specialties',
+    parentCategory: 'Desi AF',
+    displayOrder: 4,
+    isActive: true
+  },
+  {
+    name: 'Condiments',
+    description: 'Sides and accompaniments',
+    parentCategory: 'Desi AF',
+    displayOrder: 5,
+    isActive: true
+  },
+  {
+    name: 'But Serious',
+    description: 'Main course specialties',
+    parentCategory: 'Desi AF',
+    displayOrder: 6,
+    isActive: true
+  },
   {
     name: 'Lowkey Sweet',
     description: 'Desserts and sweet treats for a subtle indulgence',
@@ -60,7 +103,20 @@ async function seed() {
       console.log(`⏭  Skipping (already exists): ${cat.name}`);
       skipped++;
     } else {
-      await Category.create(cat);
+      const catData = { ...cat };
+      
+      // Resolve parentCategory if it exists by name reference
+      if (cat.parentCategory) {
+        const parent = await Category.findOne({ name: cat.parentCategory });
+        if (parent) {
+          catData.parentCategory = parent._id;
+        } else {
+          console.warn(`⚠️  Parent category "${cat.parentCategory}" not found for "${cat.name}"`);
+          delete catData.parentCategory;
+        }
+      }
+
+      await Category.create(catData);
       console.log(`✅ Created: ${cat.name}`);
       added++;
     }

@@ -39,6 +39,12 @@ const menuItemSchema = new mongoose.Schema({
     ref: 'Category',
     required: true
   },
+  subcategory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    default: null,
+    index: true
+  },
   tags: {
     type: [String],
     required: true

@@ -8,6 +8,7 @@ const { uploadSingleImage } = require('../middlewares/upload');
 // Public routes
 router.get('/', optionalAuth, categoryController.getAllCategories);
 router.get('/:id', categoryController.getCategoryById);
+router.get('/:id/subcategories', optionalAuth, categoryController.getSubcategories);
 router.get('/:id/items', optionalAuth, categoryController.getCategoryItems);
 
 // Admin routes

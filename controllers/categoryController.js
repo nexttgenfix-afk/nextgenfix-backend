@@ -2,16 +2,20 @@ const Category = require('../models/categoryModel');
 const MenuItem = require('../models/menuItemModel');
 const mongoose = require('mongoose');
 
-// Get all categories
+// Get all categories (top-level only by default; pass ?all=true for flat list)
 exports.getAllCategories = async (req, res) => {
   try {
-    const { isActive } = req.query;
+    const { isActive, all } = req.query;
     
     const filter = {};
     
-    // Filter by active status if provided
     if (isActive !== undefined) {
       filter.isActive = isActive === 'true';
+    }
+
+    // By default return only top-level categories (parentCategory is null)
+    if (all !== 'true') {
+      filter.parentCategory = null;
     }
     
     const categories = await Category.find(filter)
@@ -25,6 +29,41 @@ exports.getAllCategories = async (req, res) => {
   } catch (err) {
     console.error('Error fetching all categories:', err);
     res.status(500).json({ message: "Failed to fetch categories", error: err.message });
+  }
+};
+
+// Get all subcategories for a given parent category
+exports.getSubcategories = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid category ID format" });
+    }
+
+    const parent = await Category.findById(id);
+    if (!parent) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const filter = { parentCategory: id };
+    if (isActive !== undefined) {
+      filter.isActive = isActive === 'true';
+    }
+
+    const subcategories = await Category.find(filter)
+      .sort({ displayOrder: 1, name: 1 });
+
+    res.status(200).json({
+      success: true,
+      parent: { _id: parent._id, name: parent.name },
+      subcategories,
+      total: subcategories.length
+    });
+  } catch (err) {
+    console.error('Error fetching subcategories:', err);
+    res.status(500).json({ message: "Failed to fetch subcategories", error: err.message });
   }
 };
 
@@ -53,7 +92,7 @@ exports.getCategoryById = async (req, res) => {
   }
 };
 
-// Get menu items for a category
+// Get menu items for a category (or subcategory)
 exports.getCategoryItems = async (req, res) => {
   try {
     const { id } = req.params;
@@ -63,21 +102,40 @@ exports.getCategoryItems = async (req, res) => {
       isAvailable,
       isVeg,
       sortBy = 'name',
-      sortOrder = 'asc'
+      sortOrder = 'asc',
+      subcategory
     } = req.query;
     
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid category ID format" });
     }
     
-    // Check if category exists
     const category = await Category.findById(id);
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
+
+    // If a specific subcategory filter is requested, use it directly
+    // Otherwise, if this is a parent category, include items from all its subcategories
+    let categoryIds = [id];
+    if (!subcategory && !category.parentCategory) {
+      // Top-level category: also include items belonging to any of its subcategories
+      const subs = await Category.find({ parentCategory: id }).select('_id');
+      categoryIds = [id, ...subs.map(s => s._id.toString())];
+    } else if (subcategory) {
+      if (!mongoose.Types.ObjectId.isValid(subcategory)) {
+        return res.status(400).json({ message: "Invalid subcategory ID format" });
+      }
+      categoryIds = [subcategory];
+    }
     
     // Build filter for menu items
-    const filter = { category: id };
+    const filter = {
+      $or: [
+        { category: { $in: categoryIds } },
+        { subcategory: { $in: categoryIds } }
+      ]
+    };
     
     if (isAvailable !== undefined) {
       filter.isAvailable = isAvailable === 'true';
@@ -87,20 +145,17 @@ exports.getCategoryItems = async (req, res) => {
       filter.isVeg = isVeg === 'true';
     }
     
-    // Build sort option
     const sort = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
     
-    // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Get menu items
     const menuItems = await MenuItem.find(filter)
+      .populate('subcategory', 'name')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
     
-    // Get total count
     const total = await MenuItem.countDocuments(filter);
     
     res.status(200).json({
@@ -179,7 +234,7 @@ exports.getCategories = async (req, res) => {
 // Create a new category
 exports.createCategory = async (req, res) => {
   try {
-    const { name, description, displayOrder, image } = req.body;
+    const { name, description, displayOrder, image, parentCategory } = req.body;
 
     if (!name) {
       return res.status(400).json({ message: "Category name is required" });
@@ -188,8 +243,20 @@ exports.createCategory = async (req, res) => {
     const categoryData = {
       name,
       description,
-      displayOrder: displayOrder || 0
+      displayOrder: displayOrder || 0,
+      parentCategory: parentCategory || null
     };
+    
+    // Validate parentCategory if provided
+    if (parentCategory) {
+      if (!mongoose.Types.ObjectId.isValid(parentCategory)) {
+        return res.status(400).json({ message: "Invalid parent category ID format" });
+      }
+      const parent = await Category.findById(parentCategory);
+      if (!parent) {
+        return res.status(404).json({ message: "Parent category not found" });
+      }
+    }
     
     // Add image if uploaded
     if (req.file) {
@@ -203,7 +270,7 @@ exports.createCategory = async (req, res) => {
     
     res.status(201).json({ 
       success: true,
-      message: "Category created successfully", 
+      message: parentCategory ? "Subcategory created successfully" : "Category created successfully", 
       category: newCategory 
     });
   } catch (err) {
@@ -216,13 +283,13 @@ exports.createCategory = async (req, res) => {
 exports.updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, displayOrder, isActive } = req.body;
+    const { name, description, displayOrder, isActive, parentCategory } = req.body;
     
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: "Invalid category ID format" });
     }
     
-    // Load category first so we can perform ownership check
+    // Load category first
     const category = await Category.findById(id);
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
@@ -233,6 +300,16 @@ exports.updateCategory = async (req, res) => {
     if (description !== undefined) updateData.description = description;
     if (displayOrder !== undefined) updateData.displayOrder = displayOrder;
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (parentCategory !== undefined) {
+      if (parentCategory && !mongoose.Types.ObjectId.isValid(parentCategory)) {
+        return res.status(400).json({ message: "Invalid parent category ID format" });
+      }
+      // Prevent self-referencing
+      if (parentCategory && parentCategory === id) {
+        return res.status(400).json({ message: "Category cannot be its own parent" });
+      }
+      updateData.parentCategory = parentCategory || null;
+    }
     
     // Add image if uploaded
     if (req.file) {
@@ -242,11 +319,11 @@ exports.updateCategory = async (req, res) => {
     // Apply updates and save
     Object.assign(category, updateData);
     await category.save();
-    const updatedCategory = category;
     
     res.status(200).json({ 
+      success: true,
       message: "Category updated successfully", 
-      category: updatedCategory 
+      category 
     });
   } catch (err) {
     console.error('Error updating category:', err);

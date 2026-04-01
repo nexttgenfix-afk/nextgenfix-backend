@@ -10,6 +10,12 @@ const categorySchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  parentCategory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    default: null,
+    index: true
+  },
   restaurantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
