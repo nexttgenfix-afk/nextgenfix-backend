@@ -650,8 +650,21 @@ exports.updateProfile = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const [userDoc, primaryLocation] = await Promise.all([
+      User.findById(req.user.id).select("-password").lean(),
+      Location.findOne({
+        user: req.user.id,
+        isDefault: true
+      }).lean()
+    ]);
+
+    if (!userDoc) return res.status(404).json({ message: "User not found" });
+
+    const { locations, ...userWithoutLocations } = userDoc;
+    const user = {
+      ...userWithoutLocations,
+      location: primaryLocation || null
+    };
 
     res.status(200).json({
       message: "User profile fetched successfully",

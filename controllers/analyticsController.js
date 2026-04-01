@@ -199,7 +199,7 @@ const getOrderOverview = async (req, res) => {
           ordersByNewCustomers: { $sum: { $cond: [ { $eq: ['$hasPrior', false] }, '$ordersInPeriod', 0 ] } },
           ordersByReturningCustomers: { $sum: { $cond: [ { $eq: ['$hasPrior', true] }, '$ordersInPeriod', 0 ] } }
         } }
-      ]);
+      ]).allowDiskUse(true);
 
       const custStats = customerOrderAgg[0] || { totalOrders: 0, ordersByNewCustomers: 0, ordersByReturningCustomers: 0 };
       const firstTimeRate = custStats.totalOrders > 0 ? (custStats.ordersByNewCustomers / custStats.totalOrders) * 100 : 0;
@@ -289,7 +289,7 @@ const getAbandonedCarts = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const stats = abandonedStats[0] || {
       totalAbandonedCarts: 0,
@@ -321,7 +321,7 @@ const getAbandonedCarts = async (req, res) => {
       {
         $sort: { count: -1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     stats.abandonmentReasons = abandonmentReasons;
 
@@ -487,19 +487,19 @@ const getUserOverview = async (req, res) => {
     // Demographics
     const genderBreakdown = await User.aggregate([
       { $group: { _id: '$gender', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const ageGroupBreakdown = await User.aggregate([
       { $group: { _id: '$ageGroup', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const deviceTypeBreakdown = await User.aggregate([
       { $group: { _id: '$deviceType', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const loginMethodBreakdown = await User.aggregate([
       { $group: { _id: '$preferredLoginMethod', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const metrics = {
       totalUsers,
@@ -607,7 +607,7 @@ const getTopSellingProducts = async (req, res) => {
       },
       { $sort: { totalRevenue: -1 } },
       { $limit: parseInt(limit) }
-    ]);
+    ]).allowDiskUse(true);
 
     await setCachedMetric(cacheKey, 'Top Selling Products', topProducts, {}, [], 'daily');
 
@@ -690,7 +690,7 @@ const getProductCategoryPerformance = async (req, res) => {
       {
         $sort: { totalRevenue: -1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     await setCachedMetric(cacheKey, 'Category Performance', categoryStats, {}, [], 'daily');
 
@@ -745,29 +745,29 @@ const getUserDemographics = async (req, res) => {
     const genderBreakdown = await User.aggregate([
       { $match: { lastActive: { $gte: startDate, $lte: endDate } } },
       { $group: { _id: '$gender', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const ageGroupBreakdown = await User.aggregate([
       { $match: { lastActive: { $gte: startDate, $lte: endDate } } },
       { $group: { _id: '$ageGroup', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const locationBreakdown = await User.aggregate([
       { $match: { lastActive: { $gte: startDate, $lte: endDate } } },
       { $group: { _id: '$location.city', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 10 }
-    ]);
+    ]).allowDiskUse(true);
 
     const deviceTypeBreakdown = await User.aggregate([
       { $match: { lastActive: { $gte: startDate, $lte: endDate } } },
       { $group: { _id: '$deviceType', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const loginMethodBreakdown = await User.aggregate([
       { $match: { lastActive: { $gte: startDate, $lte: endDate } } },
       { $group: { _id: '$preferredLoginMethod', count: { $sum: 1 } } }
-    ]);
+    ]).allowDiskUse(true);
 
     const demographics = {
       totalActiveUsers,
@@ -938,7 +938,7 @@ const getSessionAnalytics = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const stats = sessionStats[0] || {
       totalSessions: 0,
@@ -973,7 +973,7 @@ const getSessionAnalytics = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     stats.durationDistribution = durationBuckets.map(bucket => ({
       range: bucket._id === '3600+' ? '60+ min' : `${Math.floor(bucket._id / 60)}-${Math.floor((bucket._id + 30) / 60)} min`,
@@ -1043,7 +1043,7 @@ const getFavoritesAnalytics = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const stats = favoritesStats[0] || {
       totalFavorites: 0,
@@ -1076,7 +1076,7 @@ const getFavoritesAnalytics = async (req, res) => {
       {
         $sort: { '_id': 1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     stats.favoritesTrend = favoritesOverTime.map(item => ({
       date: item._id,
@@ -1147,7 +1147,7 @@ const getLoyaltyAnalytics = async (req, res) => {
           avgPointsPerUser: { $avg: '$loyaltyPoints' }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const stats = loyaltyStats[0] || {
       totalUsers: 0,
@@ -1195,7 +1195,7 @@ const getLoyaltyAnalytics = async (req, res) => {
       {
         $sort: { '_id': 1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     stats.pointsTrend = pointsOverTime.map(item => ({
       date: item._id,
@@ -1228,7 +1228,7 @@ const getLoyaltyAnalytics = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const refStats = referralStats[0] || { totalReferrals: 0, successfulReferrals: 0 };
     stats.referralStats = {
@@ -1346,7 +1346,7 @@ const getCustomerLifetimeValue = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const ltvData = userLTV[0] || {
       avgLTV: 0,
@@ -1407,7 +1407,7 @@ const getCustomerLifetimeValue = async (req, res) => {
           customerCount: { $sum: 1 }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     // Calculate LTV by tier
     const tierLTV = await Order.aggregate([
@@ -1441,7 +1441,7 @@ const getCustomerLifetimeValue = async (req, res) => {
           customerCount: { $sum: 1 }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const breakdown = {
       byGender: genderLTV.map(item => ({
@@ -1567,7 +1567,7 @@ const getGenderTrends = async (req, res) => {
       {
         $limit: 50
       }
-    ]);
+    ]).allowDiskUse(true);
 
     // Format day of week
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -1613,7 +1613,7 @@ const getGenderTrends = async (req, res) => {
       {
         $sort: { orderCount: -1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const breakdown = {
       genderItemDayTrends: formattedTrends,
@@ -1734,7 +1734,7 @@ const getHighValueCustomers = async (req, res) => {
       {
         $sort: { totalRevenue: -1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     // Calculate total revenue
     const totalRevenue = customerRevenue.reduce((sum, c) => sum + c.totalRevenue, 0);
@@ -1879,7 +1879,7 @@ const getTimeToSecondOrder = async (req, res) => {
           secondOrderValue: '$secondOrder.orderValue'
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     if (orderTiming.length === 0) {
       return res.json({
@@ -1998,7 +1998,7 @@ const getPeakOrderTimes = async (req, res) => {
       {
         $sort: { '_id.dayOfWeek': 1, '_id.hour': 1 }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     
@@ -2112,7 +2112,7 @@ const getSearchAnalytics = async (req, res) => {
       {
         $limit: 100
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const totalSearches = searchData.reduce((sum, s) => sum + s.searchCount, 0);
     const failedSearches = searchData.filter(s => s.avgResultsFound === 0);
@@ -2212,7 +2212,7 @@ const getCustomizationAnalytics = async (req, res) => {
           totalRevenue: { $sum: '$itemPrice' }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const data = customizationData[0] || {
       totalItems: 0,
@@ -2324,7 +2324,7 @@ const getPushNotificationAnalytics = async (req, res) => {
           }
         }
       }
-    ]);
+    ]).allowDiskUse(true);
 
     const totalNotifications = notificationStats.reduce((sum, n) => sum + n.totalSent, 0);
     const totalOpened = notificationStats.reduce((sum, n) => sum + n.opened, 0);
@@ -2440,7 +2440,7 @@ const getSubscriptionAnalytics = async (req, res) => {
       const revenueAgg = await Subscription.aggregate([
         { $match: { isActive: true } },
         { $group: { _id: null, totalRevenue: { $sum: '$price' }, count: { $sum: 1 } } }
-      ]);
+      ]).allowDiskUse(true);
       const subscriptionRevenue = (revenueAgg[0] && revenueAgg[0].totalRevenue) || 0;
 
       // Churn rate in period: subscriptions cancelled during period / subscriptions active at period start
@@ -2454,14 +2454,14 @@ const getSubscriptionAnalytics = async (req, res) => {
         { $project: { day: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, cancelledAt: 1, cancelledDay: { $dateToString: { format: '%Y-%m-%d', date: '$cancelledAt' } } } },
         { $group: { _id: '$day', subscriptions: { $sum: 1 } } },
         { $sort: { _id: 1 } }
-      ]);
+      ]).allowDiskUse(true);
 
       const churnTrend = await Subscription.aggregate([
         { $match: { cancelledAt: { $gte: startDate, $lte: endDate } } },
         { $project: { cancelledDay: { $dateToString: { format: '%Y-%m-%d', date: '$cancelledAt' } } } },
         { $group: { _id: '$cancelledDay', churns: { $sum: 1 } } },
         { $sort: { _id: 1 } }
-      ]);
+      ]).allowDiskUse(true);
 
       // Merge trend and churnTrend into date-wise array
       const trendMap = {};

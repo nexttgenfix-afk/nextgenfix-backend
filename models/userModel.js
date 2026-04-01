@@ -297,6 +297,8 @@ userSchema.index({ tier: 1 });
 userSchema.index({ isGuest: 1 });
 userSchema.index({ guestId: 1 }, { sparse: true });
 userSchema.index({ isGuest: 1, guestExpiresAt: 1 });
+userSchema.index({ lastActive: -1 }); // for user activity analytics
+userSchema.index({ createdAt: -1 }); // for user growth analytics
 
 // TTL index for automatic cleanup of expired guests
 userSchema.index(

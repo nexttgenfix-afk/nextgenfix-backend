@@ -216,6 +216,14 @@ const orderSchema = new mongoose.Schema({
 // Indexes for faster queries
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ status: 1 });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ restaurantId: 1, createdAt: -1 });
+orderSchema.index({ 'items.category': 1 });
+orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ createdAt: -1 }); // for general date-range analytics
+orderSchema.index({ restaurantId: 1, createdAt: -1 }); // for restaurant-scoped analytics
+orderSchema.index({ 'items.category': 1 }); // for category breakdown
+orderSchema.index({ paymentStatus: 1, createdAt: -1 }); // for payment analytics
 
 // Virtual field to format delivery address for display
 orderSchema.virtual('formattedDeliveryAddress').get(function() {
