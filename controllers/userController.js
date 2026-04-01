@@ -47,25 +47,44 @@ const updatePreferences = async (req, res) => {
 // Get user tier information
 const getTierInfo = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('tier tierProgress totalSpent');
+    const user = await User.findById(req.user.id).select('tier tierProgress nanoPoints');
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-  // Settings model exposes a static getSettings() helper
-  const settings = await Settings.getSettings();
-  // tierConfig is stored as an object with keys for each tier
-  const tierInfo = settings.tierConfig ? settings.tierConfig[user.tier] : null;
+    const settings = await Settings.getSettings();
+    const tierConfig = settings.tierConfig || {};
+
+    const currentTier = user.tier || 'bronze';
+    const currentMonthOrders = user.tierProgress?.currentMonthOrders || 0;
+
+    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
+    const currentIndex = tierOrder.indexOf(currentTier);
+    const nextTier = currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
+
+    const nextTierMinOrders = nextTier ? (tierConfig[nextTier]?.minOrders || 0) : 0;
+    const ordersToNextTier = nextTier ? Math.max(0, nextTierMinOrders - currentMonthOrders) : 0;
+    const progressPercent = nextTier && nextTierMinOrders > 0
+      ? Math.min(100, Math.round((currentMonthOrders / nextTierMinOrders) * 100))
+      : 100;
+
+    const currentTierConfig = tierConfig[currentTier] || {};
 
     res.json({
-      currentTier: user.tier,
-      progress: user.tierProgress,
-      totalSpent: user.totalSpent,
-      nextTier: tierInfo?.nextTier,
-      benefits: tierInfo?.benefits
+      success: true,
+      data: {
+        currentTier,
+        nanoPoints: user.nanoPoints || 0,
+        currentMonthOrders,
+        nextTier,
+        ordersToNextTier,
+        progressPercent,
+        discount: currentTierConfig.discount || 0,
+        benefits: currentTierConfig.benefits || []
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ success: false, message: 'Server error', error: error.message });
   }
 };
 

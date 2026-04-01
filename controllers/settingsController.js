@@ -298,8 +298,7 @@ exports.updateTierConfig = async (req, res) => {
 
     const settings = await Settings.getSettings();
 
-  // Update tier configurations (no platinum tier)
-  const tiers = ['bronze', 'silver', 'gold'];
+    const tiers = ['bronze', 'silver', 'gold', 'platinum'];
     for (const tier of tiers) {
       if (tierConfig[tier]) {
         if (tierConfig[tier].minOrders !== undefined) {
@@ -307,6 +306,9 @@ exports.updateTierConfig = async (req, res) => {
         }
         if (tierConfig[tier].discount !== undefined) {
           settings.tierConfig[tier].discount = tierConfig[tier].discount;
+        }
+        if (Array.isArray(tierConfig[tier].benefits)) {
+          settings.tierConfig[tier].benefits = tierConfig[tier].benefits;
         }
       }
     }
@@ -325,6 +327,31 @@ exports.updateTierConfig = async (req, res) => {
       message: 'Failed to update tier configuration',
       error: error.message
     });
+  }
+};
+
+/**
+ * Get all tier configs (Public)
+ * GET /api/settings/tiers
+ */
+exports.getTiersConfig = async (req, res) => {
+  try {
+    const settings = await Settings.getSettings();
+    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
+    const tiers = tierOrder.map((name) => {
+      const config = settings.tierConfig?.[name] || {};
+      return {
+        name,
+        minOrders: config.minOrders ?? 0,
+        discount: config.discount ?? 0,
+        benefits: config.benefits ?? []
+      };
+    });
+
+    res.json({ success: true, data: tiers });
+  } catch (error) {
+    console.error('Error fetching tier config:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch tier configuration', error: error.message });
   }
 };
 

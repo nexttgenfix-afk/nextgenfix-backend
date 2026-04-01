@@ -10,6 +10,7 @@ router.get('/public', settingsController.getPublicSettings);
 router.get('/business-hours', settingsController.getBusinessHours);
 router.put('/business', verifyAdmin, settingsController.updateBusinessInfo);
 router.get('/delivery-charges', settingsController.getDeliveryCharges);
+router.get('/tiers', settingsController.getTiersConfig);
 
 // Admin routes (auth required)
 router.get('/', verifyAdmin, settingsController.getAllSettings);

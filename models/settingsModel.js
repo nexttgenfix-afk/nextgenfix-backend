@@ -42,17 +42,24 @@ const settingsSchema = new mongoose.Schema({
   tierConfig: {
     bronze: {
       minOrders: { type: Number, default: 0 },
-      discount: { type: Number, default: 0, min: 0, max: 100 }
+      discount: { type: Number, default: 0, min: 0, max: 100 },
+      benefits: { type: [String], default: [] }
     },
     silver: {
       minOrders: { type: Number, default: 5 },
-      discount: { type: Number, default: 5, min: 0, max: 100 }
+      discount: { type: Number, default: 5, min: 0, max: 100 },
+      benefits: { type: [String], default: ['Get List of Coupons'] }
     },
     gold: {
       minOrders: { type: Number, default: 15 },
-      discount: { type: Number, default: 10, min: 0, max: 100 }
+      discount: { type: Number, default: 10, min: 0, max: 100 },
+      benefits: { type: [String], default: ['Get List of Coupons', 'Members-only Deals'] }
     },
-    
+    platinum: {
+      minOrders: { type: Number, default: 30 },
+      discount: { type: Number, default: 15, min: 0, max: 100 },
+      benefits: { type: [String], default: ['Get List of Coupons', 'Members-only Deals', 'Priority Support', 'Free Delivery'] }
+    }
   },
   
   // Referral Program Configuration

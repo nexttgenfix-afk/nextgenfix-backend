@@ -21,7 +21,9 @@ module.exports = {
       const monthlyOrders = user.tierProgress?.currentMonthOrders || 0;
 
       let newTier = 'bronze';
-      if (monthlyOrders >= tierConfig.gold.requiredOrders) {
+      if (tierConfig.platinum && monthlyOrders >= tierConfig.platinum.requiredOrders) {
+        newTier = 'platinum';
+      } else if (monthlyOrders >= tierConfig.gold.requiredOrders) {
         newTier = 'gold';
       } else if (monthlyOrders >= tierConfig.silver.requiredOrders) {
         newTier = 'silver';
@@ -87,7 +89,8 @@ module.exports = {
         tiers: {
           bronze: tierConfig.bronze,
           silver: tierConfig.silver,
-          gold: tierConfig.gold
+          gold: tierConfig.gold,
+          platinum: tierConfig.platinum
         }
       };
     } catch (error) {
@@ -209,7 +212,7 @@ module.exports = {
    * @returns {String|null} Next tier or null
    */
   getNextTier(currentTier) {
-    const tierOrder = ['bronze', 'silver', 'gold'];
+    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
     const currentIndex = tierOrder.indexOf(currentTier);
     return currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
   },
