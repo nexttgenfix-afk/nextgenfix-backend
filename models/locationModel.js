@@ -76,8 +76,7 @@ const locationSchema = new mongoose.Schema({
   coordinates: {
     type: {
       type: String,
-      enum: ['Point'],
-      default: 'Point'
+      enum: ['Point']
     },
     coordinates: {
       type: [Number], // [longitude, latitude]
@@ -117,7 +116,7 @@ const locationSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-locationSchema.index({ coordinates: '2dsphere' }); // For geospatial queries
+locationSchema.index({ coordinates: '2dsphere' }, { sparse: true }); // For geospatial queries (sparse: skips docs without coordinates)
 locationSchema.index({ user: 1, isDefault: 1 }); // For efficient default location lookup
 locationSchema.index({ user: 1, saveAs: 1 }); // For filtering by category
 locationSchema.index({ user: 1, lastUsed: -1 }); // For recently used locations
