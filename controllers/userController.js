@@ -55,10 +55,10 @@ const getTierInfo = async (req, res) => {
     const settings = await Settings.getSettings();
     const tierConfig = settings.tierConfig || {};
 
-    const currentTier = user.tier || 'bronze';
+    const currentTier = user.tier || 'silver';
     const currentMonthOrders = user.tierProgress?.currentMonthOrders || 0;
 
-    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
+    const tierOrder = ['silver', 'gold', 'platinum'];
     const currentIndex = tierOrder.indexOf(currentTier);
     const nextTier = currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
 
@@ -676,6 +676,7 @@ exports.addLocation = async (req, res) => {
     saveAs,
     flatNumber,
     area,
+    city,
     landmark,
     deliveryInstructions,
     coordinates,
@@ -683,9 +684,9 @@ exports.addLocation = async (req, res) => {
   } = req.body;
 
   // Validate required fields
-  if (!flatNumber || !area) {
+  if (!flatNumber || !area || !city) {
     return res.status(400).json({
-      message: "Required fields missing: flatNumber and area are required"
+      message: "Required fields missing: flatNumber, area, and city are required"
     });
   }
 
@@ -721,6 +722,7 @@ exports.addLocation = async (req, res) => {
       user: userId,
       flatNumber,
       area,
+      city,
       isDefault: shouldBeDefault
     };
 
@@ -872,7 +874,7 @@ exports.getDefaultAddress = exports.getDefaultLocation;
 // Set a location as default
 exports.setDefaultLocation = async (req, res) => {
   const userId = req.userId;
-  const { locationId } = req.params;
+  const locationId = req.params.locationId || req.params.addressId;
   
   try {
     // First, unset any existing default location
@@ -907,7 +909,7 @@ exports.setDefaultAddress = exports.setDefaultLocation;
 
 exports.editLocation = async (req, res) => {
   const userId = req.userId;
-  const { locationId } = req.params;
+  const locationId = req.params.locationId || req.params.addressId;
   const { 
     placeId,
     formattedAddress,
@@ -916,6 +918,8 @@ exports.editLocation = async (req, res) => {
     saveAs,
     flatNumber, 
     landmark, 
+    area,
+    city,
     deliveryInstructions,
     coordinates,
     isDefault
@@ -931,6 +935,8 @@ exports.editLocation = async (req, res) => {
     if (saveAs !== undefined) updateData.saveAs = saveAs;
     if (flatNumber) updateData.flatNumber = flatNumber;
     if (landmark !== undefined) updateData.landmark = landmark;
+    if (area !== undefined) updateData.area = area;
+    if (city !== undefined) updateData.city = city;
     if (deliveryInstructions !== undefined) updateData.deliveryInstructions = deliveryInstructions;
     
     // Update coordinates only if valid coordinates are provided
@@ -989,7 +995,7 @@ exports.editAddress = exports.editLocation;
 
 exports.deleteLocation = async (req, res) => {
   const userId = req.userId;
-  const { locationId } = req.params;
+  const locationId = req.params.locationId || req.params.addressId;
 
   try {
     // Find and delete the location document
@@ -1000,6 +1006,15 @@ exports.deleteLocation = async (req, res) => {
 
     if (!deletedLocation) {
       return res.status(404).json({ message: "Location not found or unauthorized" });
+    }
+
+    // If the deleted location was the default, set another one as default (if any exist)
+    if (deletedLocation.isDefault) {
+      const remainingLocation = await Location.findOne({ user: userId }).sort({ updatedAt: -1 });
+      if (remainingLocation) {
+        remainingLocation.isDefault = true;
+        await remainingLocation.save();
+      }
     }
 
     // Also remove the reference from the user's locations array

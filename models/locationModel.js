@@ -63,6 +63,11 @@ const locationSchema = new mongoose.Schema({
     required: true,
     description: "Apartment/Road/Area name"
   },
+  city: {
+    type: String,
+    required: true,
+    description: "City / Locality"
+  },
   landmark: {
     type: String,
     description: "Nearby landmark for easy identification"
