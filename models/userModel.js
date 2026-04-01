@@ -114,8 +114,8 @@ const userSchema = new mongoose.Schema({
   // Tier & Rewards
   tier: {
     type: String,
-    enum: ['bronze', 'silver', 'gold', 'platinum'],
-    default: 'bronze'
+    enum: ['silver', 'gold', 'platinum'],
+    default: 'silver'
   },
   tierProgress: {
     currentMonthOrders: { type: Number, default: 0 },

@@ -40,11 +40,6 @@ const settingsSchema = new mongoose.Schema({
   
   // Customer Tier Configuration
   tierConfig: {
-    bronze: {
-      minOrders: { type: Number, default: 0 },
-      discount: { type: Number, default: 0, min: 0, max: 100 },
-      benefits: { type: [String], default: [] }
-    },
     silver: {
       minOrders: { type: Number, default: 5 },
       discount: { type: Number, default: 5, min: 0, max: 100 },
@@ -62,6 +57,11 @@ const settingsSchema = new mongoose.Schema({
     }
   },
   
+  // Loyalty Points Configuration
+  loyaltyConfig: {
+    nanoPointsPerOrder: { type: Number, default: 10, min: 0 }
+  },
+
   // Referral Program Configuration
   referralConfig: {
     enabled: { type: Boolean, default: false },

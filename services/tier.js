@@ -15,18 +15,16 @@ module.exports = {
         throw new Error('User not found');
       }
 
-      const settings = await Settings.getInstance();
-      const tierConfig = settings.tierSystem;
+      const settings = await Settings.getSettings();
+      const tierConfig = settings.tierConfig;
 
       const monthlyOrders = user.tierProgress?.currentMonthOrders || 0;
 
-      let newTier = 'bronze';
-      if (tierConfig.platinum && monthlyOrders >= tierConfig.platinum.requiredOrders) {
+      let newTier = 'silver';
+      if (tierConfig.platinum && monthlyOrders >= tierConfig.platinum.minOrders) {
         newTier = 'platinum';
-      } else if (monthlyOrders >= tierConfig.gold.requiredOrders) {
+      } else if (monthlyOrders >= tierConfig.gold.minOrders) {
         newTier = 'gold';
-      } else if (monthlyOrders >= tierConfig.silver.requiredOrders) {
-        newTier = 'silver';
       }
 
       // Update user tier if changed
@@ -74,20 +72,19 @@ module.exports = {
         throw new Error('User not found');
       }
 
-      const settings = await Settings.getInstance();
-      const tierConfig = settings.tierSystem;
+      const settings = await Settings.getSettings();
+      const tierConfig = settings.tierConfig;
 
       const monthlyOrders = user.tierProgress?.currentMonthOrders || 0;
-      const currentTier = user.tier || 'bronze';
+      const currentTier = user.tier || 'silver';
 
       return {
         currentTier,
         monthlyOrders,
-        currentDiscount: tierConfig[currentTier].discount,
+        currentDiscount: tierConfig[currentTier]?.discount ?? 0,
         nextTier: this.getNextTier(currentTier),
         ordersToNextTier: this.getOrdersToNextTier(monthlyOrders, currentTier, tierConfig),
         tiers: {
-          bronze: tierConfig.bronze,
           silver: tierConfig.silver,
           gold: tierConfig.gold,
           platinum: tierConfig.platinum
@@ -107,8 +104,8 @@ module.exports = {
    */
   async applyTierDiscount(amount, tier) {
     try {
-      const settings = await Settings.getInstance();
-      const tierConfig = settings.tierSystem;
+      const settings = await Settings.getSettings();
+      const tierConfig = settings.tierConfig;
 
       const discountPercent = tierConfig[tier]?.discount || 0;
       const discountAmount = (amount * discountPercent) / 100;
@@ -153,16 +150,16 @@ module.exports = {
         // Reset monthly counter
         user.tierProgress.currentMonthOrders = 0;
         user.tierProgress.lastTierUpdate = now;
-        user.tier = 'bronze'; // Reset to bronze at start of new month
+        user.tier = 'silver'; // Reset to silver at start of new month
         await user.save();
 
         try {
           await createNotification({
             userId: user._id,
             title: 'Monthly Loyalty Reset',
-            message: 'A new month has started. Your loyalty tier has been reset to Bronze. Start ordering to climb back up!',
+            message: 'A new month has started. Your loyalty tier has been reset to Silver. Start ordering to climb back up!',
             type: 'loyalty',
-            data: { resetTier: 'bronze', previousTier }
+            data: { resetTier: 'silver', previousTier }
           });
         } catch (notifErr) {
           console.error('Tier reset notification error:', notifErr);
@@ -212,7 +209,7 @@ module.exports = {
    * @returns {String|null} Next tier or null
    */
   getNextTier(currentTier) {
-    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
+    const tierOrder = ['silver', 'gold', 'platinum'];
     const currentIndex = tierOrder.indexOf(currentTier);
     return currentIndex < tierOrder.length - 1 ? tierOrder[currentIndex + 1] : null;
   },
@@ -228,7 +225,37 @@ module.exports = {
     const nextTier = this.getNextTier(currentTier);
     if (!nextTier) return 0;
 
-    const requiredOrders = tierConfig[nextTier].requiredOrders;
-    return Math.max(0, requiredOrders - currentOrders);
-  }
+    const requiredOrders = tierConfig[nextTier].minOrders;
+    return Math.max(0, requiredOrders - currentOrders);  },
+
+  /**
+   * Increment currentMonthOrders for a user, handle month reset, then recalculate tier.
+   * Called on every order delivery. This is what orderController imports.
+   * @param {String} userId - User ID
+   * @returns {Object} Tier calculation result
+   */
+  async updateUserTier(userId) {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const now = new Date();
+    const lastUpdate = user.tierProgress?.lastTierUpdate || new Date(0);
+    const isNewMonth =
+      now.getMonth() !== lastUpdate.getMonth() ||
+      now.getFullYear() !== lastUpdate.getFullYear();
+
+    if (isNewMonth) {
+      user.tierProgress = user.tierProgress || {};
+      user.tierProgress.currentMonthOrders = 1; // first order of the new month
+      user.tierProgress.lastTierUpdate = now;
+      user.tier = 'silver';
+      await user.save();
+    } else {
+      user.tierProgress = user.tierProgress || {};
+      user.tierProgress.currentMonthOrders = (user.tierProgress.currentMonthOrders || 0) + 1;
+      user.tierProgress.lastTierUpdate = now;
+      await user.save();
+    }
+
+    return this.calculateUserTier(userId);  }
 };

@@ -298,7 +298,7 @@ exports.updateTierConfig = async (req, res) => {
 
     const settings = await Settings.getSettings();
 
-    const tiers = ['bronze', 'silver', 'gold', 'platinum'];
+    const tiers = ['silver', 'gold', 'platinum'];
     for (const tier of tiers) {
       if (tierConfig[tier]) {
         if (tierConfig[tier].minOrders !== undefined) {
@@ -337,7 +337,7 @@ exports.updateTierConfig = async (req, res) => {
 exports.getTiersConfig = async (req, res) => {
   try {
     const settings = await Settings.getSettings();
-    const tierOrder = ['bronze', 'silver', 'gold', 'platinum'];
+    const tierOrder = ['silver', 'gold', 'platinum'];
     const tiers = tierOrder.map((name) => {
       const config = settings.tierConfig?.[name] || {};
       return {
