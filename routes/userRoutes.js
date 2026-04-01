@@ -36,6 +36,7 @@ router.get('/me/referral-code', requireAuth, userController.getReferralCode);
 router.post('/refer', requireAuth, userController.applyReferralCode);
 router.get('/me/referrals', requireAuth, userController.getReferrals);
 router.put('/me/notifications', requireAuth, userController.updateNotificationPreferences);
+router.delete('/me', requireAuth, userController.deleteMyAccount);
 
 // Admin routes (require admin auth)
 const { verifyAdmin } = require('../middlewares/adminAuth');

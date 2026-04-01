@@ -2,7 +2,7 @@ const ChefRequest = require('../models/chefRequestModel');
 const User = require('../models/userModel');
 const Chef = require('../models/chefModel');
 const mongoose = require('mongoose');
-const { createNotificationUtil } = require('./notificationController');
+const { createNotification } = require('../services/notification');
 
 // Create a food request
 exports.createFoodRequest = async (req, res) => {
@@ -68,11 +68,13 @@ exports.createFoodRequest = async (req, res) => {
     await chefRequest.save();
 
     // Create notification for chef
-    await createNotificationUtil(
-      chef._id, 
-      `New food request: ${dishName}`, 
-      userId
-    );
+    await createNotification({
+      userId: chef._id,
+      title: 'New Food Request',
+      message: `New food request received: ${dishName}`,
+      type: 'chef_request',
+      data: { requestId: chefRequest.requestId, requestType: 'food', fromUserId: userId }
+    });
 
     res.status(201).json({
       message: "Food request created successfully",
@@ -137,11 +139,13 @@ exports.createChefRentalRequest = async (req, res) => {
     await chefRequest.save();
 
     // Create notification for chef
-    await createNotificationUtil(
-      chef._id, 
-      `New chef rental request for ${scheduledDate.from ? new Date(scheduledDate.from).toLocaleDateString() : 'unknown date'}`, 
-      userId
-    );
+    await createNotification({
+      userId: chef._id,
+      title: 'New Chef Rental Request',
+      message: `New chef rental request for ${scheduledDate.from ? new Date(scheduledDate.from).toLocaleDateString() : 'upcoming date'}`,
+      type: 'chef_request',
+      data: { requestId: chefRequest.requestId, requestType: 'chef-rental', fromUserId: userId }
+    });
 
     res.status(201).json({
       message: "Chef rental request created successfully",
@@ -207,11 +211,13 @@ exports.createRecipeRequest = async (req, res) => {
     await chefRequest.save();
 
     // Create notification for chef
-    await createNotificationUtil(
-      chef._id, 
-      `New recipe request for ${foodName}`, 
-      userId
-    );
+    await createNotification({
+      userId: chef._id,
+      title: 'New Recipe Request',
+      message: `New recipe request received: ${foodName}`,
+      type: 'chef_request',
+      data: { requestId: chefRequest.requestId, requestType: 'recipe', fromUserId: userId }
+    });
 
     res.status(201).json({
       message: "Recipe request created successfully",
@@ -361,11 +367,13 @@ exports.cancelRequest = async (req, res) => {
     await request.save();
 
     // Notify chef about cancellation
-    await createNotificationUtil(
-      request.chef, 
-      `Request ${request.requestId} has been cancelled by the user`, 
-      userId
-    );
+    await createNotification({
+      userId: request.chef,
+      title: 'Request Cancelled',
+      message: `Request ${request.requestId} has been cancelled by the user`,
+      type: 'chef_request',
+      data: { requestId: request.requestId, cancelledBy: userId }
+    });
 
     res.status(200).json({
       message: "Request cancelled successfully",
@@ -612,12 +620,13 @@ exports.updateChefRentalStatus = async (req, res) => {
       ? `Your chef rental request has been accepted by ${chef.name}`
       : `Your chef rental request has been declined by ${chef.name}`;
       
-    await createNotificationUtil(
-      request.user, 
-      notificationMessage, 
-      chef._id,
-      { type: 'chef-rental', id: request.requestId }
-    );
+    await createNotification({
+      userId: request.user,
+      title: status === 'accepted' ? 'Request Accepted' : 'Request Declined',
+      message: notificationMessage,
+      type: 'chef_request',
+      data: { requestId: request.requestId, requestType: 'chef-rental', status }
+    });
     
     res.status(200).json({
       message: `Request ${status} successfully`,

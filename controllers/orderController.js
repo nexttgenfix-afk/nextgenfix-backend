@@ -183,6 +183,21 @@ const createOrder = async (req, res) => {
           const prices = orderItems.map(i => i.price);
           if (prices.length > 0) discountAmount = Math.min(...prices);
         }
+
+        try {
+          const couponMessage = freeDelivery
+            ? `Coupon "${couponCode}" applied — free delivery on this order!`
+            : `Coupon "${couponCode}" applied. You saved ₹${discountAmount}!`;
+          await createNotification({
+            userId: req.user.id,
+            title: 'Coupon Applied',
+            message: couponMessage,
+            type: 'coupon',
+            data: { couponCode, discountAmount, freeDelivery, couponId: coupon._id }
+          });
+        } catch (notifErr) {
+          console.error('Coupon applied notification error:', notifErr);
+        }
       }
     }
 

@@ -81,9 +81,11 @@ const locationSchema = new mongoose.Schema({
     },
     coordinates: {
       type: [Number], // [longitude, latitude]
-      required: true,
       validate: {
         validator: function(coords) {
+          if (coords === undefined || coords === null) {
+            return true;
+          }
           return coords.length === 2 && 
                  coords[0] >= -180 && coords[0] <= 180 && // longitude
                  coords[1] >= -90 && coords[1] <= 90;    // latitude

@@ -37,6 +37,18 @@ const register = async (req, res) => {
       referralCode
     });
 
+    try {
+      await createNotification({
+        userId: user._id,
+        title: 'Welcome to NextGenFix!',
+        message: `Welcome, ${user.name}! Your account has been created successfully.`,
+        type: 'auth',
+        data: { authProvider: 'email' }
+      });
+    } catch (notifErr) {
+      console.error('Welcome notification error:', notifErr);
+    }
+
     // ⭐ NEW: Check for guest token and merge data
     const guestToken = req.headers['x-guest-token'];
     let mergeMessage = null;
@@ -333,6 +345,18 @@ const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
+    try {
+      await createNotification({
+        userId: user._id,
+        title: 'Password Reset Successful',
+        message: 'Your password has been reset successfully. If you did not request this, please contact support immediately.',
+        type: 'auth',
+        data: { resetAt: new Date().toISOString() }
+      });
+    } catch (notifErr) {
+      console.error('Password reset notification error:', notifErr);
+    }
+
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
     res.status(401).json({ message: 'Invalid or expired reset token' });
@@ -448,6 +472,18 @@ exports.phoneLogin = async (req, res) => {
         referralCode: generateReferralCode()
       });
 
+      try {
+        await createNotification({
+          userId: user._id,
+          title: 'Welcome to NextGenFix!',
+          message: `Welcome! Your account has been created successfully.`,
+          type: 'auth',
+          data: { authProvider: 'phone' }
+        });
+      } catch (notifErr) {
+        console.error('Welcome notification error:', notifErr);
+      }
+
       console.log('✅ New user created:', user._id);
     } else {
       // Update existing user info
@@ -562,6 +598,18 @@ exports.googleLogin = async (req, res) => {
         referralCode: generateReferralCode()
       });
 
+      try {
+        await createNotification({
+          userId: user._id,
+          title: 'Welcome to NextGenFix!',
+          message: `Welcome, ${user.name}! Your account has been created successfully.`,
+          type: 'auth',
+          data: { authProvider: 'google' }
+        });
+      } catch (notifErr) {
+        console.error('Welcome notification error:', notifErr);
+      }
+
       console.log('✅ New Google user created:', user._id);
     } else {
       user.firebaseUid = uid;
@@ -667,6 +715,18 @@ exports.appleLogin = async (req, res) => {
         isGuest: false,
         referralCode: generateReferralCode()
       });
+
+      try {
+        await createNotification({
+          userId: user._id,
+          title: 'Welcome to NextGenFix!',
+          message: `Welcome${user.name && user.name !== 'Apple User' ? `, ${user.name}` : ''}! Your account has been created successfully.`,
+          type: 'auth',
+          data: { authProvider: 'apple' }
+        });
+      } catch (notifErr) {
+        console.error('Welcome notification error:', notifErr);
+      }
 
       console.log('✅ New Apple user created:', user._id);
     } else {

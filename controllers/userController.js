@@ -193,6 +193,21 @@ const applyReferralCode = async (req, res) => {
       type: 'referral'
     });
 
+    // Notify referee about their coupon
+    if (refereeCoupon) {
+      try {
+        await createNotification({
+          userId: user._id,
+          title: 'Referral Coupon Received',
+          message: `You received a ₹${refereeCoupon.discountValue} referral coupon. Use code ${refereeCoupon.code} on your next order!`,
+          type: 'coupon',
+          data: { couponId: refereeCoupon._id, couponCode: refereeCoupon.code, origin: 'referral' }
+        });
+      } catch (notifErr) {
+        console.error('Referee coupon notification error:', notifErr);
+      }
+    }
+
     res.json({
       message: 'Referral code applied successfully',
       refereeCoupon: refereeCoupon ? { id: refereeCoupon._id, code: refereeCoupon.code } : null,
@@ -326,6 +341,36 @@ const deleteUser = async (req, res) => {
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// User: Delete own account
+const deleteMyAccount = async (req, res) => {
+  try {
+    // req.user.id is populated by requireAuth middleware
+    const user = await User.findByIdAndDelete(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'User account not found' 
+      });
+    }
+
+    // Optional: Add logic here to cleanup related data (carts, locations, etc.)
+    // For now, simple account deletion as requested
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Your account has been successfully deleted' 
+    });
+  } catch (error) {
+    console.error('Account deletion error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Failed to delete account', 
+      error: error.message 
+    });
   }
 };
 
@@ -561,6 +606,18 @@ exports.updateProfile = async (req, res) => {
 
     if (!updatedUser) return res.status(404).json({ message: 'User not found' });
 
+    try {
+      await createNotification({
+        userId,
+        title: 'Profile Updated',
+        message: 'Your profile has been updated successfully.',
+        type: 'system',
+        data: { updatedFields: Object.keys(update) }
+      });
+    } catch (notifErr) {
+      console.error('Profile update notification error:', notifErr);
+    }
+
     res.status(200).json({
       message: 'Profile updated successfully',
       user: updatedUser
@@ -607,17 +664,21 @@ exports.addLocation = async (req, res) => {
   } = req.body;
 
   // Validate required fields
-  if (!flatNumber || !area || !coordinates) {
+  if (!flatNumber || !area) {
     return res.status(400).json({
-      message: "Required fields missing: flatNumber, area, and coordinates are required"
+      message: "Required fields missing: flatNumber and area are required"
     });
   }
 
-  // Validate coordinates
-  if (!Array.isArray(coordinates) || coordinates.length !== 2 ||
-      typeof coordinates[0] !== 'number' || typeof coordinates[1] !== 'number') {
+  // Validate coordinates only when provided
+  if (coordinates !== undefined && (
+    !Array.isArray(coordinates) ||
+    coordinates.length !== 2 ||
+    typeof coordinates[0] !== 'number' ||
+    typeof coordinates[1] !== 'number'
+  )) {
     return res.status(400).json({ 
-      message: "Valid coordinates are required as an array [longitude, latitude]" 
+      message: "Valid coordinates must be an array [longitude, latitude]" 
     });
   }
 
@@ -641,12 +702,15 @@ exports.addLocation = async (req, res) => {
       user: userId,
       flatNumber,
       area,
-      coordinates: {
-        type: "Point",
-        coordinates: coordinates
-      },
       isDefault: shouldBeDefault
     };
+
+    if (coordinates !== undefined) {
+      locationData.coordinates = {
+        type: "Point",
+        coordinates: coordinates
+      };
+    }
     
     // Add optional Google Maps fields
     if (placeId) locationData.placeId = placeId;
@@ -850,9 +914,19 @@ exports.editLocation = async (req, res) => {
     if (landmark !== undefined) updateData.landmark = landmark;
     if (deliveryInstructions !== undefined) updateData.deliveryInstructions = deliveryInstructions;
     
-    // Update coordinates if provided
-    if (coordinates && Array.isArray(coordinates) && coordinates.length === 2 &&
-        typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+    // Update coordinates only if valid coordinates are provided
+    if (coordinates !== undefined && (
+      !Array.isArray(coordinates) ||
+      coordinates.length !== 2 ||
+      typeof coordinates[0] !== 'number' ||
+      typeof coordinates[1] !== 'number'
+    )) {
+      return res.status(400).json({
+        message: "Valid coordinates must be an array [longitude, latitude]"
+      });
+    }
+
+    if (coordinates !== undefined) {
       updateData.coordinates = {
         type: "Point",
         coordinates: coordinates
@@ -1255,6 +1329,21 @@ exports.completePersonalDetails = async (req, res) => {
         type: 'referral'
       });
 
+      // Notify referee about their coupon
+      if (refereeCoupon) {
+        try {
+          await createNotification({
+            userId: user._id,
+            title: 'Referral Coupon Received',
+            message: `You received a ₹${refereeCoupon.discountValue} referral coupon. Use code ${refereeCoupon.code} on your next order!`,
+            type: 'coupon',
+            data: { couponId: refereeCoupon._id, couponCode: refereeCoupon.code, origin: 'referral' }
+          });
+        } catch (notifErr) {
+          console.error('Referee coupon notification error:', notifErr);
+        }
+      }
+
       referralResult = {
         refereeCoupon: refereeCoupon ? { id: refereeCoupon._id, code: refereeCoupon.code } : null,
         referrerCoupon: referrerCoupon ? { id: referrerCoupon._id, code: referrerCoupon.code } : null
@@ -1294,6 +1383,7 @@ module.exports = Object.assign({}, exports, {
   getUserById: exports.getUserById || getUserById,
   updateUser: exports.updateUser || updateUser,
   deleteUser: exports.deleteUser || deleteUser,
+  deleteMyAccount: exports.deleteMyAccount || deleteMyAccount,
 
   // functions only assigned via `exports.*` throughout the file
   postReview: exports.postReview,

@@ -208,22 +208,3 @@ module.exports = {
   }
 };
 
-// Export standalone function for backward compatibility
-const createNotification = async (notificationData) => {
-  const { userId, type, title, message, data = {} } = notificationData;
-  
-  const notification = new Notification({
-    user: userId,
-    type,
-    title,
-    message,
-    data,
-    sentVia: ['push'],
-    isRead: false
-  });
-
-  return await notification.save();
-};
-
-// Add standalone function to exports
-module.exports.createNotification = createNotification;

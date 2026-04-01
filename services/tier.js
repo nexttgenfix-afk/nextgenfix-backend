@@ -1,5 +1,6 @@
 const User = require('../models/userModel');
 const Settings = require('../models/settingsModel');
+const { createNotification } = require('./notification');
 
 module.exports = {
   /**
@@ -28,9 +29,22 @@ module.exports = {
 
       // Update user tier if changed
       if (user.tier !== newTier) {
+        const previousTier = user.tier;
         user.tier = newTier;
         user.tierProgress.lastTierUpdate = new Date();
         await user.save();
+
+        try {
+          await createNotification({
+            userId: user._id,
+            title: 'Loyalty Tier Updated',
+            message: `Congratulations! You have been upgraded to ${newTier.charAt(0).toUpperCase() + newTier.slice(1)} tier!`,
+            type: 'loyalty',
+            data: { previousTier, newTier, monthlyOrders }
+          });
+        } catch (notifErr) {
+          console.error('Tier upgrade notification error:', notifErr);
+        }
       }
 
       return {
@@ -132,11 +146,24 @@ module.exports = {
                          now.getFullYear() !== lastUpdate.getFullYear();
 
       if (isNewMonth) {
+        const previousTier = user.tier;
         // Reset monthly counter
         user.tierProgress.currentMonthOrders = 0;
         user.tierProgress.lastTierUpdate = now;
         user.tier = 'bronze'; // Reset to bronze at start of new month
         await user.save();
+
+        try {
+          await createNotification({
+            userId: user._id,
+            title: 'Monthly Loyalty Reset',
+            message: 'A new month has started. Your loyalty tier has been reset to Bronze. Start ordering to climb back up!',
+            type: 'loyalty',
+            data: { resetTier: 'bronze', previousTier }
+          });
+        } catch (notifErr) {
+          console.error('Tier reset notification error:', notifErr);
+        }
 
         return {
           reset: true,
