@@ -137,8 +137,8 @@ const validateOrder = [
     .isArray({ min: 1 })
     .withMessage('Items must be a non-empty array if provided'),
   body('orderType')
-    .isIn(['delivery', 'take_away', 'car'])
-    .withMessage('Order type must be delivery, take_away, or car'),
+    .isIn(['delivery', 'take_away', 'car', 'dine_in'])
+    .withMessage('Order type must be delivery, take_away, car, or dine_in'),
   body('deliveryAddress')
     .if(body('orderType').equals('delivery'))
     .notEmpty()

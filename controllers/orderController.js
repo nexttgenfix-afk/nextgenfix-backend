@@ -256,7 +256,7 @@ const createOrder = async (req, res) => {
       user: req.user.id,
       orderType,
       scheduleType,
-      scheduledTime: scheduleType === 'scheduled' && scheduledTime ? new Date(scheduledTime) : undefined,
+      scheduledTime: scheduleType === 'scheduled' && scheduledTime ? new Date(scheduledTime) : new Date(),
       items: orderItems,
       billing: {
         subtotal: totalAmount,

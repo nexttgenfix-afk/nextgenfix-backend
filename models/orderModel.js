@@ -9,7 +9,7 @@ const orderSchema = new mongoose.Schema({
   },
   orderType: {
     type: String,
-    enum: ['delivery', 'take_away', 'car'],
+    enum: ['delivery', 'take_away', 'car', 'dine_in'],
     required: true
   },
   dayPart: {
