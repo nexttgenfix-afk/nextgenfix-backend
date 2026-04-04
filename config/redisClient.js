@@ -4,7 +4,7 @@ const redis = require('redis');
 
 let client;
 
-if (process.env.REDIS_URL) {
+if (process.env.REDIS_URL && process.env.REDIS_URL.startsWith('redis://')) {
   client = redis.createClient({
     url: process.env.REDIS_URL,
     socket: {

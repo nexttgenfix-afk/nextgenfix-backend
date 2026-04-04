@@ -203,11 +203,11 @@ const createOrder = async (req, res) => {
     }
 
     // Handle nano points redemption
-    const { useNanoPoints = false, nanoPointsToRedeem = 0 } = req.body;
+    const { nanoPointsToRedeem = 0 } = req.body;
     let nanoPointsDiscount = 0;
     let nanoPointsUsed = 0;
 
-    if (useNanoPoints && nanoPointsToRedeem > 0) {
+    if (nanoPointsToRedeem > 0) {
       const pointsRequested = Math.floor(nanoPointsToRedeem);
 
       if (pointsRequested <= 0) {
@@ -305,6 +305,10 @@ const createOrder = async (req, res) => {
           deliveryFee,
           discounts: {
             totalDiscount: discountAmount + nanoPointsDiscount,
+            promoCode: {
+              code: couponCode || undefined,
+              amount: discountAmount
+            },
             nanoPointsRedemption: {
               points: nanoPointsUsed,
               amount: nanoPointsDiscount
