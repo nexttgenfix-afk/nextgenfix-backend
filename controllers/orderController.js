@@ -203,7 +203,8 @@ const createOrder = async (req, res) => {
     }
 
     // Handle nano points redemption
-    const { nanoPointsToRedeem = 0 } = req.body;
+    const cart = await Cart.findOne({ user: req.user.id });
+    const { nanoPointsToRedeem = (cart?.nanoPointsApplied || 0) } = req.body;
     let nanoPointsDiscount = 0;
     let nanoPointsUsed = 0;
 

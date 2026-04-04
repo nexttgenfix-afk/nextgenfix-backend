@@ -238,6 +238,8 @@ const clearCart = async (req, res) => {
     cart.items = [];
     cart.totalAmount = 0;
     cart.discountAmount = 0;
+    cart.nanoPointsApplied = 0;
+    cart.nanoPointsDiscount = 0;
     cart.finalAmount = 0;
     cart.coupon = null;
     await cart.save();
@@ -354,6 +356,97 @@ const removeCoupon = async (req, res) => {
   }
 };
 
+// Apply nano points to cart
+const applyNanoPoints = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { nanoPointsToRedeem } = req.body;
+
+    const cart = await Cart.findOne({ user: userId });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart not found'
+      });
+    }
+
+    const value = Math.floor(nanoPointsToRedeem);
+    if (value <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Points must be a positive integer'
+      });
+    }
+
+    // Check user's points balance
+    const user = await User.findById(userId).select('nanoPoints').lean();
+    if (!user || user.nanoPoints < value) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient nano points',
+        data: { available: user?.nanoPoints || 0 }
+      });
+    }
+
+    // Validate against current settings conversion rate
+    const settings = await Settings.getSettings();
+    const conversionRate = settings?.loyaltyConfig?.nanoPointsConversionRate || 10;
+    
+    // We update the model's nanoPointsApplied and then let calculateTotal handle the calculation
+    cart.nanoPointsApplied = value;
+    await cart.calculateTotal();
+    await cart.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Nano points applied to cart preview',
+      cart,
+      isGuest: req.isGuest
+    });
+
+  } catch (error) {
+    console.error('applyNanoPoints error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to apply nano points',
+      error: error.message
+    });
+  }
+};
+
+// Remove nano points from cart
+const removeNanoPoints = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const cart = await Cart.findOne({ user: userId });
+    if (!cart) {
+      return res.status(404).json({
+        success: false,
+        message: 'Cart not found'
+      });
+    }
+
+    cart.nanoPointsApplied = 0;
+    cart.nanoPointsDiscount = 0;
+    await cart.calculateTotal();
+    await cart.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Nano points removed',
+      cart,
+      isGuest: req.isGuest
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove nano points',
+      error: error.message
+    });
+  }
+};
+
 // Get cart summary
 const getCartSummary = async (req, res) => {
   try {
@@ -407,5 +500,7 @@ module.exports = {
   clearCart,
   applyCoupon,
   removeCoupon,
+  applyNanoPoints,
+  removeNanoPoints,
   getCartSummary
 };

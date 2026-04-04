@@ -24,6 +24,12 @@ router.post('/coupon', requireGuestOrUser, cartController.applyCoupon);
 // Remove coupon from cart
 router.delete('/coupon', requireGuestOrUser, cartController.removeCoupon);
 
+// Apply nano points to cart
+router.post('/points', requireGuestOrUser, cartController.applyNanoPoints);
+
+// Remove nano points from cart
+router.delete('/points', requireGuestOrUser, cartController.removeNanoPoints);
+
 // Get cart summary
 router.get('/summary', requireGuestOrUser, cartController.getCartSummary);
 

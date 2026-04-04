@@ -44,6 +44,14 @@ const cartSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  nanoPointsApplied: {
+    type: Number,
+    default: 0
+  },
+  nanoPointsDiscount: {
+    type: Number,
+    default: 0
+  },
   finalAmount: {
     type: Number,
     default: 0
@@ -109,7 +117,30 @@ cartSchema.methods.calculateTotal = async function() {
   }
 
   this.discountAmount = discount;
-  this.finalAmount = total - discount;
+  
+  // Apply nano points discount if exists
+  let pointsDiscount = 0;
+  if (this.nanoPointsApplied > 0) {
+    try {
+      const Settings = mongoose.model('Settings');
+      const settings = await Settings.findOne();
+      const conversionRate = settings?.loyaltyConfig?.nanoPointsConversionRate || 10;
+      
+      // Calculate max potential discount (after coupon)
+      const maxDiscount = Math.max(0, total - discount);
+      pointsDiscount = Math.min(this.nanoPointsApplied / conversionRate, maxDiscount);
+      
+      // Actual points mapping back to the discount allowed
+      this.nanoPointsDiscount = pointsDiscount;
+    } catch (e) {
+      console.error('Nano points calculation error:', e.message);
+      this.nanoPointsDiscount = 0;
+    }
+  } else {
+    this.nanoPointsDiscount = 0;
+  }
+
+  this.finalAmount = Math.max(0, total - discount - this.nanoPointsDiscount);
 };
 
 module.exports = mongoose.model('Cart', cartSchema);
