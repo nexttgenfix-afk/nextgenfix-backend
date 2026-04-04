@@ -59,7 +59,8 @@ const settingsSchema = new mongoose.Schema({
   
   // Loyalty Points Configuration
   loyaltyConfig: {
-    nanoPointsPerOrder: { type: Number, default: 10, min: 0 }
+    nanoPointsPerOrder: { type: Number, default: 10, min: 0 },
+    nanoPointsConversionRate: { type: Number, default: 10, min: 1 }
   },
 
   // Referral Program Configuration

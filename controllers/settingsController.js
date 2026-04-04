@@ -493,3 +493,40 @@ exports.updateSchedulingConfig = async (req, res) => {
     });
   }
 };
+
+/**
+ * Update loyalty configuration (Admin only)
+ * PUT /api/settings/loyalty
+ */
+exports.updateLoyaltyConfig = async (req, res) => {
+  try {
+    const { nanoPointsPerOrder, nanoPointsConversionRate } = req.body;
+
+    if (nanoPointsConversionRate !== undefined && nanoPointsConversionRate < 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Conversion rate must be at least 1 (1 point = 1 rupee minimum)'
+      });
+    }
+
+    const settings = await Settings.getSettings();
+
+    if (nanoPointsPerOrder !== undefined) settings.loyaltyConfig.nanoPointsPerOrder = nanoPointsPerOrder;
+    if (nanoPointsConversionRate !== undefined) settings.loyaltyConfig.nanoPointsConversionRate = nanoPointsConversionRate;
+
+    await settings.save();
+
+    res.json({
+      success: true,
+      message: 'Loyalty configuration updated successfully',
+      data: settings.loyaltyConfig
+    });
+  } catch (error) {
+    console.error('Error updating loyalty config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update loyalty configuration',
+      error: error.message
+    });
+  }
+};

@@ -20,5 +20,6 @@ router.put('/tiers', verifyAdmin, settingsController.updateTierConfig);
 router.put('/referral', verifyAdmin, settingsController.updateReferralConfig);
 router.put('/tax', verifyAdmin, settingsController.updateTaxConfig);
 router.put('/scheduling', verifyAdmin, settingsController.updateSchedulingConfig);
+router.put('/loyalty', verifyAdmin, settingsController.updateLoyaltyConfig);
 
 module.exports = router;

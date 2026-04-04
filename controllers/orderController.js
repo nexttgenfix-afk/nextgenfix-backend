@@ -76,7 +76,7 @@ const createOrder = async (req, res) => {
     let couponCode = req.body.couponCode;
 
     // load user early so we can evaluate referral coupons for auto-apply
-    const currentUser = await User.findById(req.user.id).select('totalOrders referralCoupons referredBy referrals').lean();
+    const currentUser = await User.findById(req.user.id).select('totalOrders referralCoupons referredBy referrals nanoPoints').lean();
 
     let orderItems = [];
     let totalAmount = 0;
@@ -202,7 +202,47 @@ const createOrder = async (req, res) => {
       }
     }
 
-    const finalAmount = totalAmount + deliveryFee - discountAmount;
+    // Handle nano points redemption
+    const { useNanoPoints = false, nanoPointsToRedeem = 0 } = req.body;
+    let nanoPointsDiscount = 0;
+    let nanoPointsUsed = 0;
+
+    if (useNanoPoints && nanoPointsToRedeem > 0) {
+      const pointsRequested = Math.floor(nanoPointsToRedeem);
+
+      if (pointsRequested <= 0) {
+        return res.status(400).json({ success: false, message: 'nanoPointsToRedeem must be a positive integer' });
+      }
+
+      if ((currentUser.nanoPoints || 0) < pointsRequested) {
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient nano points',
+          data: { required: pointsRequested, available: currentUser.nanoPoints || 0 }
+        });
+      }
+
+      const settings = await Settings.getSettings();
+      const conversionRate = settings.loyaltyConfig?.nanoPointsConversionRate || 10;
+
+      // Calculate rupee discount, cap at remaining order amount after coupon
+      const maxDiscount = Math.max(0, totalAmount + deliveryFee - discountAmount);
+      nanoPointsDiscount = Math.min(pointsRequested / conversionRate, maxDiscount);
+      // Recalculate actual points used based on capped discount
+      nanoPointsUsed = Math.ceil(nanoPointsDiscount * conversionRate);
+
+      // Atomically deduct points — returns null if balance insufficient at deduction time
+      const deducted = await User.findOneAndUpdate(
+        { _id: req.user.id, nanoPoints: { $gte: nanoPointsUsed } },
+        { $inc: { nanoPoints: -nanoPointsUsed } }
+      );
+
+      if (!deducted) {
+        return res.status(400).json({ success: false, message: 'Insufficient nano points (concurrent request conflict)' });
+      }
+    }
+
+    const finalAmount = Math.max(0, totalAmount + deliveryFee - discountAmount - nanoPointsDiscount);
 
     // Handle wallet payment
     const { useWallet = false, walletAmount = 0 } = req.body;
@@ -252,33 +292,60 @@ const createOrder = async (req, res) => {
     }
 
     // Create order
-    const order = await Order.create({
-      user: req.user.id,
-      orderType,
-      scheduleType,
-      scheduledTime: scheduleType === 'scheduled' && scheduledTime ? new Date(scheduledTime) : new Date(),
-      items: orderItems,
-      billing: {
-        subtotal: totalAmount,
-        deliveryFee,
-        discounts: {
-          totalDiscount: discountAmount,
-          walletPayment: {
-            amount: walletPaymentAmount,
-            transactionId: walletTransactionId
-          }
+    let order;
+    try {
+      order = await Order.create({
+        user: req.user.id,
+        orderType,
+        scheduleType,
+        scheduledTime: scheduleType === 'scheduled' && scheduledTime ? new Date(scheduledTime) : new Date(),
+        items: orderItems,
+        billing: {
+          subtotal: totalAmount,
+          deliveryFee,
+          discounts: {
+            totalDiscount: discountAmount + nanoPointsDiscount,
+            nanoPointsRedemption: {
+              points: nanoPointsUsed,
+              amount: nanoPointsDiscount
+            },
+            walletPayment: {
+              amount: walletPaymentAmount,
+              transactionId: walletTransactionId
+            }
+          },
+          totalAmount: finalAmount,
+          remainingAmount,
+          paidViaWallet
         },
-        totalAmount: finalAmount,
-        remainingAmount,
-        paidViaWallet
-      },
-      deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
-      deliveryInstructions: orderType === 'delivery' ? (deliveryInstructions || '') : undefined,
-      paymentDetails: {
-        method: paymentMethod
-      },
-      cookingInstructions: specialInstructions
-    });
+        deliveryAddress: orderType === 'delivery' ? deliveryAddress : undefined,
+        deliveryInstructions: orderType === 'delivery' ? (deliveryInstructions || '') : undefined,
+        paymentDetails: {
+          method: paymentMethod
+        },
+        cookingInstructions: specialInstructions
+      });
+    } catch (orderCreateErr) {
+      // Refund nano points if order creation failed
+      if (nanoPointsUsed > 0) {
+        await User.findByIdAndUpdate(req.user.id, { $inc: { nanoPoints: nanoPointsUsed } });
+      }
+      throw orderCreateErr;
+    }
+
+    // Record nano points redemption in user history
+    if (nanoPointsUsed > 0) {
+      await User.findByIdAndUpdate(req.user.id, {
+        $push: {
+          nanoPointsHistory: {
+            points: -nanoPointsUsed,
+            type: 'redeem',
+            orderId: order._id,
+            description: `Redeemed ${nanoPointsUsed} points for order #${order.orderNumber || order._id}`
+          }
+        }
+      });
+    }
 
     // Update menu item order counts
     for (const item of orderItems) {

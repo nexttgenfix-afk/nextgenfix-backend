@@ -38,11 +38,17 @@ router.get('/me/referrals', requireAuth, userController.getReferrals);
 router.put('/me/notifications', requireAuth, userController.updateNotificationPreferences);
 router.delete('/me', requireAuth, userController.deleteMyAccount);
 
+// Nano points (user)
+router.get('/me/nano-points', requireAuth, userController.getNanoPoints);
+
 // Admin routes (require admin auth)
 const { verifyAdmin } = require('../middlewares/adminAuth');
 
 // Get all users (admin only)
 router.get('/', verifyAdmin, userController.getAllUsers);
+
+// Nano points bonus (admin only) — must be before /:id catch-all
+router.post('/nano-points/bonus', verifyAdmin, userController.addBonusNanoPoints);
 
 // Get user by ID (admin only)
 router.get('/:id', verifyAdmin, userController.getUserById);
