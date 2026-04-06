@@ -43,7 +43,8 @@ class WhatsappWebhookController {
         try {
           // interactive is a JSON string or object from MSG91
           const selection = typeof interactive === 'string' ? JSON.parse(interactive) : interactive;
-          // In some cases, selection is the button object or list row object
+          
+          // In some cases, selection is the full 'interactive' object containing 'list_reply'
           if (selection?.id) {
             input = selection.id;
           } else if (selection?.list_reply?.id) {
@@ -53,6 +54,24 @@ class WhatsappWebhookController {
           }
         } catch (e) {
           console.error('Error parsing list selection:', e);
+        }
+      }
+
+      // Check if current message is inside the 'messages' array (standard for some MSG91 versions)
+      if (req.body.messages) {
+        try {
+          const msgs = typeof req.body.messages === 'string' ? JSON.parse(req.body.messages) : req.body.messages;
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            const m = msgs[0];
+            if (m.interactive) {
+              if (m.interactive.list_reply?.id) input = m.interactive.list_reply.id;
+              if (m.interactive.button_reply?.id) input = m.interactive.button_reply.id;
+            } else if (m.text?.body) {
+              if (!input) input = m.text.body;
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing nested messages array:', e);
         }
       }
 
