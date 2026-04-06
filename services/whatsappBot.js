@@ -12,43 +12,65 @@ class WhatsappBot {
    * Main entry point to process a message
    */
   async processMessage(phone, text, messageType, customerName) {
-    let session = await WhatsappSession.findOne({ phone });
+    try {
+      let session = await WhatsappSession.findOne({ phone });
 
-    // Initialize session if it doesn't exist
-    if (!session) {
-      session = new WhatsappSession({ phone, customerName, state: 'INIT' });
-      await session.save();
-    }
+      // Initialize session if it doesn't exist
+      if (!session) {
+        session = new WhatsappSession({ phone, customerName, state: 'INIT' });
+        await session.save();
+      }
 
-    // Capture customer name if provided from profile and missing in session
-    if (customerName && !session.customerName) {
-      session.customerName = customerName;
-    }
+      // Capture customer name if provided from profile and missing in session
+      if (customerName && !session.customerName) {
+        session.customerName = customerName;
+      }
 
-    const currentState = session.state;
-    console.log(`Processing WhatsApp [${phone}] State: ${currentState} Input: ${text}`);
+      const currentState = session.state;
+      console.log(`[WhatsApp Bot] Processing [${phone}] | State: ${currentState} | Input: "${text}"`);
 
-    switch (currentState) {
-      case 'INIT':
-        return await this.handleInit(session, text);
-      case 'BROWSING_MENU':
-        return await this.handleBrowsingMenu(session, text);
-      case 'SELECTING_ITEM':
-        return await this.handleSelectItem(session, text);
-      case 'COLLECTING_QUANTITY':
-        return await this.handleCollectQuantity(session, text);
-      case 'CART_REVIEW':
-        return await this.handleCartReview(session, text);
-      case 'COLLECTING_ADDRESS':
-        return await this.handleCollectAddress(session, text);
-      case 'PAYMENT_PENDING':
-        return await this.handlePaymentPending(session, text);
-      case 'ORDER_CONFIRMED':
-        return await this.handleOrderConfirmed(session , text);
-      case 'AWAITING_FEEDBACK':
-        return await this.handleAwaitingFeedback(session, text);
-      default:
-        return await this.handleInit(session, text);
+      let response;
+      switch (currentState) {
+        case 'INIT':
+          response = await this.handleInit(session, text);
+          break;
+        case 'BROWSING_MENU':
+          response = await this.handleBrowsingMenu(session, text);
+          break;
+        case 'SELECTING_ITEM':
+          response = await this.handleSelectItem(session, text);
+          break;
+        case 'COLLECTING_QUANTITY':
+          response = await this.handleCollectQuantity(session, text);
+          break;
+        case 'CART_REVIEW':
+          response = await this.handleCartReview(session, text);
+          break;
+        case 'COLLECTING_ADDRESS':
+          response = await this.handleCollectAddress(session, text);
+          break;
+        case 'PAYMENT_PENDING':
+          response = await this.handlePaymentPending(session, text);
+          break;
+        case 'ORDER_CONFIRMED':
+          response = await this.handleOrderConfirmed(session, text);
+          break;
+        case 'AWAITING_FEEDBACK':
+          response = await this.handleAwaitingFeedback(session, text);
+          break;
+        default:
+          response = await this.handleInit(session, text);
+      }
+      console.log(`[WhatsApp Bot] Finished processing [${phone}]`);
+      return response;
+    } catch (error) {
+      console.error(`[WhatsApp Bot Error] Critical failure for [${phone}]:`, error);
+      // Try to let the user know something broke
+      try {
+        await WhatsappSender.sendText(phone, "Sorry, I'm having a technical problem right now. 🛠️ Please try again in a moment.");
+      } catch (e) {
+        console.error('Could not even send error message to user:', e.message);
+      }
     }
   }
 
@@ -97,14 +119,18 @@ class WhatsappBot {
   }
 
   async handleSelectItem(session, text) {
+    const userInput = (text || "").trim();
+    console.log(`[WhatsApp Bot] handleSelectItem Input: "${userInput}"`);
+
     // If it's a category selection (cat_ID)
-    if (text.startsWith('cat_')) {
-      const categoryId = text.split('_')[1];
+    if (userInput.startsWith('cat_')) {
+      const categoryId = userInput.split('_')[1];
+      console.log(`[WhatsApp Bot] Fetching items for Category: ${categoryId}`);
       const items = await MenuItem.find({ category: categoryId, isAvailable: true }).limit(10);
 
       if (items.length === 0) {
         await WhatsappSender.sendText(session.phone, "No items available in this category. Try another!");
-        return; // Retain SELECTING_ITEM state to let them try another category
+        return; // Retain SELECTING_ITEM state
       }
 
       const sections = [{
@@ -116,14 +142,14 @@ class WhatsappBot {
         }))
       }];
 
-      // Button back to categories
       await WhatsappSender.sendList(session.phone, "Pick an item to add to your cart:", "Select Item", sections);
       return;
     }
 
     // If it's an item selection (item_ID)
-    if (text.startsWith('item_')) {
-      const itemId = text.split('_')[1];
+    if (userInput.startsWith('item_')) {
+      const itemId = userInput.split('_')[1];
+      console.log(`[WhatsApp Bot] Fetching Item details for: ${itemId}`);
       const item = await MenuItem.findById(itemId);
 
       if (!item) {
@@ -143,8 +169,17 @@ class WhatsappBot {
       return;
     }
 
-    // User typed something else - help them back
-    await WhatsappSender.sendText(session.phone, "Please select a category or item from the list provided.");
+    // If they typed something else (like "Hi" or "Menu") while in this state
+    if (userInput.toLowerCase().includes('menu')) {
+      session.state = 'BROWSING_MENU';
+      await session.save();
+      return await this.handleBrowsingMenu(session, 'view_menu');
+    }
+
+    // User didn't pick from list - remind them or give way out
+    await WhatsappSender.sendButtons(session.phone, "Please select a category or item from the list. Or click below to restart.", [
+      { id: 'view_menu', title: 'Restart Menu 🔄' }
+    ]);
   }
 
   async handleCollectQuantity(session, text) {
