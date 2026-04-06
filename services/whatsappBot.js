@@ -29,8 +29,15 @@ class WhatsappBot {
       const currentState = session.state;
       console.log(`[WhatsApp Bot] Processing [${phone}] | State: ${currentState} | Input: "${text}"`);
 
-      let response;
-      switch (currentState) {
+    // Global reset trigger: if user says "Hi" or "Menu" and we aren't at the start, reset state
+    if ((text.toLowerCase() === 'hi' || text.toLowerCase() === 'hello') && currentState !== 'INIT') {
+      console.log(`[WhatsApp Bot] Resetting session for [${phone}] due to 'Hi' command.`);
+      session.state = 'INIT';
+      // Don't save yet, handleInit will do it
+    }
+
+    let response;
+    switch (session.state) {
         case 'INIT':
           response = await this.handleInit(session, text);
           break;
