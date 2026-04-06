@@ -65,8 +65,9 @@ class WhatsappBot {
   }
 
   async handleBrowsingMenu(session, text) {
-    // If user clicked "View Menu" or similar
-    if (text.toLowerCase().includes('menu') || text === 'view_menu') {
+    const userInput = (text || "").toLowerCase().trim();
+    // If user clicked "View Menu" button (id: view_menu) or typed "menu"
+    if (userInput.includes('menu') || userInput === 'view_menu' || userInput.includes('view menu')) {
       const categories = await Category.find({ isActive: true }).sort('displayOrder');
 
       if (categories.length === 0) {
@@ -88,7 +89,7 @@ class WhatsappBot {
 
       await WhatsappSender.sendList(session.phone, "Select a category to see items:", "View Categories", sections);
     } else {
-      // Re-prompt
+      // Re-prompt if they send something else while in Browsing state
       await WhatsappSender.sendButtons(session.phone, "Click below to see our menu!", [
         { id: 'view_menu', title: 'View Menu 🍽️' }
       ]);

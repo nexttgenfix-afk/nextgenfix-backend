@@ -15,6 +15,8 @@ class WhatsappWebhookController {
     res.status(200).json({ success: true });
 
     try {
+      console.log('Incoming MSG91 Webhook Payload:', JSON.stringify(req.body, null, 2));
+
       const {
         customerNumber: phone,
         text,
@@ -31,18 +33,30 @@ class WhatsappWebhookController {
       
       // If user tapped a Quick Reply button 
       // MSG91 popup showed "button": "id" or title
-      if (button) input = button;
+      if (button) {
+        // Button might be an object like { id: 'view_menu', text: 'View Menu 🍽️' }
+        input = (typeof button === 'object' && button.id) ? button.id : button;
+      }
 
       // If user selected from a List (interactive)
       if (interactive) {
         try {
-          // interactive is a JSON string from MSG91
+          // interactive is a JSON string or object from MSG91
           const selection = typeof interactive === 'string' ? JSON.parse(interactive) : interactive;
-          if (selection?.id) input = selection.id;
+          // In some cases, selection is the button object or list row object
+          if (selection?.id) {
+            input = selection.id;
+          } else if (selection?.list_reply?.id) {
+            input = selection.list_reply.id;
+          } else if (selection?.button_reply?.id) {
+            input = selection.button_reply.id;
+          }
         } catch (e) {
           console.error('Error parsing list selection:', e);
         }
       }
+
+      console.log(`Processed Input for WhatsApp [${phone}]: "${input}"`);
 
       // Final processing
       await WhatsappBot.processMessage(phone, input, messageType, customerName);
