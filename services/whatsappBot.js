@@ -88,28 +88,43 @@ class WhatsappBot {
 
   async handleBrowsingMenu(session, text) {
     const userInput = (text || "").toLowerCase().trim();
+    console.log(`[WhatsApp Bot] handleBrowsingMenu Input: "${userInput}"`);
+    
     // If user clicked "View Menu" button (id: view_menu) or typed "menu"
     if (userInput.includes('menu') || userInput === 'view_menu' || userInput.includes('view menu')) {
       const categories = await Category.find({ isActive: true }).sort('displayOrder');
 
       if (categories.length === 0) {
+        console.warn('[WhatsApp Bot] No active categories found in DB');
         await WhatsappSender.sendText(session.phone, "Sorry, our menu is currently being updated. Please check back later!");
         return;
       }
+
+      console.log(`[WhatsApp Bot] Found ${categories.length} categories. Preparing List message.`);
 
       const sections = [{
         title: "Available Categories",
         rows: categories.map(cat => ({
           id: `cat_${cat._id}`,
-          title: cat.name,
-          description: cat.description || ""
+          title: cat.name.substring(0, 24), // WhatsApp title limit is 24 chars
+          description: (cat.description || "").substring(0, 72) // Description limit is 72 chars
         }))
       }];
 
       session.state = 'SELECTING_ITEM';
       await session.save();
 
-      await WhatsappSender.sendList(session.phone, "Select a category to see items:", "View Categories", sections);
+      try {
+        await WhatsappSender.sendList(session.phone, "Select a category to see items:", "View Categories", sections);
+        console.log('[WhatsApp Bot] Categories list sent.');
+      } catch (err) {
+        console.error('[WhatsApp Bot] Failed to send categories list:', err.message);
+        // Fallback to plain text if list fails
+        let textMenu = "*Our Categories:*\n\n";
+        categories.forEach(c => textMenu += `• ${c.name}\n`);
+        textMenu += "\nPlease type the category name to browse items.";
+        await WhatsappSender.sendText(session.phone, textMenu);
+      }
     } else {
       // Re-prompt if they send something else while in Browsing state
       await WhatsappSender.sendButtons(session.phone, "Click below to see our menu!", [

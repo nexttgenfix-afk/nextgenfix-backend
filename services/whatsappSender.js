@@ -87,7 +87,7 @@ class WhatsappSender {
         type: 'list',
         header: headerText ? { type: 'text', text: headerText } : undefined,
         body: { text: bodyText },
-        footer: { text: footerText },
+        footer: footerText ? { text: footerText } : undefined,
         action: {
           button: buttonText,
           sections: sections
@@ -95,12 +95,14 @@ class WhatsappSender {
       }
     };
 
+    console.log('[WhatsappSender] Sending List Payload:', JSON.stringify(payload, null, 2));
+
     try {
-      // Interactive messages MUST use the single message endpoint
       const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
+      console.log('[WhatsappSender] List Sent Successfully:', response.data);
       return response.data;
     } catch (error) {
-      console.error('WhatsappSender.sendList Error:', error.response?.data || error.message);
+      console.error('WhatsappSender.sendList Error:', JSON.stringify(error.response?.data || error.message, null, 2));
       throw error;
     }
   }
