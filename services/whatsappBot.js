@@ -102,9 +102,13 @@ class WhatsappBot {
 
       console.log(`[WhatsApp Bot] Found ${categories.length} categories. Preparing List message.`);
 
+      // WhatsApp List limit is 10 rows per section
+      // If we have more than 10, we must split them or limit to top 10
+      const categoriesToShow = categories.slice(0, 10);
+      
       const sections = [{
         title: "Available Categories",
-        rows: categories.map(cat => ({
+        rows: categoriesToShow.map(cat => ({
           id: `cat_${cat._id}`,
           title: cat.name.substring(0, 24), // WhatsApp title limit is 24 chars
           description: (cat.description || "").substring(0, 72) // Description limit is 72 chars
@@ -116,6 +120,11 @@ class WhatsappBot {
 
       try {
         await WhatsappSender.sendList(session.phone, "Select a category to see items:", "View Categories", sections);
+        
+        if (categories.length > 10) {
+          await WhatsappSender.sendText(session.phone, "_Showing top 10 categories. If you don't see yours, please type its name._");
+        }
+        
         console.log('[WhatsApp Bot] Categories list sent.');
       } catch (err) {
         console.error('[WhatsApp Bot] Failed to send categories list:', err.message);
