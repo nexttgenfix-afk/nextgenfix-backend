@@ -2,16 +2,24 @@ const Razorpay = require('razorpay');
 
 class RazorpayService {
   constructor() {
-    this.razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET
-    });
+    if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+      this.razorpay = new Razorpay({
+        key_id: process.env.RAZORPAY_KEY_ID,
+        key_secret: process.env.RAZORPAY_KEY_SECRET
+      });
+    } else {
+      console.warn('⚠️ Razorpay credentials missing from .env. Payments will fail.');
+      this.razorpay = null;
+    }
   }
 
   /**
    * Create a single-use payment link
    */
   async createPaymentLink(phone, amount, description, metadata = {}) {
+    if (!this.razorpay) {
+      throw new Error('Razorpay is not configured. Check environment variables.');
+    }
     try {
       // Amount in paise (1 INR = 100 paise)
       const amountInPaise = Math.round(amount * 100);
