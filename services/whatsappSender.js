@@ -4,18 +4,12 @@ const axios = require('axios');
  * Help send formatted messages via MSG91 WhatsApp Outbound API
  */
 class WhatsappSender {
-  static getPayloadBase(phone) {
-    return {
-      integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
-      content_type: 'template', // Default, will change for interactive
-      payload: {
-        messaging_product: 'whatsapp',
-        to: [phone.replace(/^\+/, '').replace(/\s+/g, '')]
-      }
-    };
-  }
-
-  static getApiUrl() {
+  static getApiUrl(isInteractive = false) {
+    // MSG91 /bulk endpoint ONLY supports templates. 
+    // For Buttons/Lists (interactive), we MUST use the single message endpoint.
+    if (isInteractive) {
+      return 'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/';
+    }
     return process.env.MSG91_WHATSAPP_API_URL || 'https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/';
   }
 
@@ -31,18 +25,15 @@ class WhatsappSender {
    */
   static async sendText(phone, text) {
     const payload = {
+      recipient_number: phone.replace(/^\+/, '').replace(/\s+/g, ''),
       integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
       content_type: 'text',
-      payload: {
-        messaging_product: 'whatsapp',
-        type: 'text',
-        text: { body: text },
-        to: [phone.replace(/^\+/, '').replace(/\s+/g, '')]
-      }
+      text: { body: text }
     };
 
     try {
-      const response = await axios.post(this.getApiUrl(), payload, { headers: this.getHeaders() });
+      // Text messages work on single endpoint
+      const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
       return response.data;
     } catch (error) {
       console.error('WhatsappSender.sendText Error:', error.response?.data || error.message);
@@ -53,32 +44,30 @@ class WhatsappSender {
   /**
    * Send a message with Quick Reply buttons (max 3)
    */
-  static async sendButtons(phone, bodyText, buttons) {
+  static async sendButtons(phone, bodyText, buttons, footerText = '') {
     const payload = {
+      recipient_number: phone.replace(/^\+/, '').replace(/\s+/g, ''),
       integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
       content_type: 'interactive',
-      payload: {
-        messaging_product: 'whatsapp',
-        type: 'interactive',
-        interactive: {
-          type: 'button',
-          body: { text: bodyText },
-          action: {
-            buttons: buttons.map((btn, index) => ({
-              type: 'reply',
-              reply: {
-                id: btn.id || `btn_${index}`,
-                title: btn.title
-              }
-            }))
-          }
-        },
-        to: [phone.replace(/^\+/, '').replace(/\s+/g, '')]
+      interactive: {
+        type: 'button',
+        body: { text: bodyText },
+        footer: { text: footerText },
+        action: {
+          buttons: buttons.map((btn, index) => ({
+            type: 'reply',
+            reply: {
+              id: btn.id || `btn_${index}`,
+              title: btn.title
+            }
+          }))
+        }
       }
     };
 
     try {
-      const response = await axios.post(this.getApiUrl(), payload, { headers: this.getHeaders() });
+      // Interactive messages MUST use the single message endpoint
+      const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
       return response.data;
     } catch (error) {
       console.error('WhatsappSender.sendButtons Error:', error.response?.data || error.message);
@@ -89,30 +78,84 @@ class WhatsappSender {
   /**
    * Send a List message (helpful for menu categories or items)
    */
-  static async sendList(phone, bodyText, buttonText, sections) {
+  static async sendList(phone, bodyText, buttonText, sections, headerText = '', footerText = '') {
     const payload = {
+      recipient_number: phone.replace(/^\+/, '').replace(/\s+/g, ''),
       integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
       content_type: 'interactive',
-      payload: {
-        messaging_product: 'whatsapp',
-        type: 'interactive',
-        interactive: {
-          type: 'list',
-          body: { text: bodyText },
-          action: {
-            button: buttonText,
-            sections: sections
-          }
-        },
-        to: [phone.replace(/^\+/, '').replace(/\s+/g, '')]
+      interactive: {
+        type: 'list',
+        header: headerText ? { type: 'text', text: headerText } : undefined,
+        body: { text: bodyText },
+        footer: { text: footerText },
+        action: {
+          button: buttonText,
+          sections: sections
+        }
       }
     };
 
     try {
-      const response = await axios.post(this.getApiUrl(), payload, { headers: this.getHeaders() });
+      // Interactive messages MUST use the single message endpoint
+      const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
       return response.data;
     } catch (error) {
       console.error('WhatsappSender.sendList Error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Location Request
+   */
+  static async sendLocationRequest(phone, bodyText = 'Please share your location') {
+    const payload = {
+      recipient_number: phone.replace(/^\+/, '').replace(/\s+/g, ''),
+      integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
+      content_type: 'interactive',
+      interactive: {
+        type: 'location_request_message',
+        body: { text: bodyText },
+        action: { name: 'send_location' }
+      }
+    };
+
+    try {
+      const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
+      return response.data;
+    } catch (error) {
+      console.error('WhatsappSender.sendLocationRequest Error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send Payment Link via MSG91 WhatsApp Outbound API
+   * Note: This is different from Razorpay payment links.
+   * This uses MSG91's structured payment message if available.
+   */
+  static async sendPaymentMessage(phone, bodyText, items, footerText = '') {
+    const payload = {
+      recipient_number: phone.replace(/^\+/, '').replace(/\s+/g, ''),
+      integrated_number: process.env.MSG91_INTEGRATED_NUMBER,
+      content_type: 'interactive',
+      interactive: {
+        type: 'payment_link',
+        body: { text: bodyText },
+        footer: { text: footerText },
+        items: items.map(item => ({
+          name: item.name,
+          amount: item.amount.toString(),
+          quantity: item.quantity.toString()
+        }))
+      }
+    };
+
+    try {
+      const response = await axios.post(this.getApiUrl(true), payload, { headers: this.getHeaders() });
+      return response.data;
+    } catch (error) {
+      console.error('WhatsappSender.sendPaymentMessage Error:', error.response?.data || error.message);
       throw error;
     }
   }
